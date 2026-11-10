@@ -99,6 +99,19 @@
   #eu-nome { flex:1; transition:color .1s; } #eu-nome.falando { color:var(--verde); }
   #btn-config-mini { background:none; border:none; color:var(--sub); font-size:18px; }
   #btn-config-mini:hover { color:var(--txt); }
+  .clicavel { cursor:pointer; border-radius:6px; }
+  .clicavel:hover { background:var(--bg2); }
+  .bloco.av { cursor:pointer; }
+  .btn-vol-bloco { right:52px; }
+  #pop-volume { position:fixed; z-index:25; background:var(--bg2); border:1px solid var(--bg3); border-radius:12px; padding:12px; width:260px; box-shadow:0 12px 40px #000a; display:flex; flex-direction:column; gap:10px; }
+  #pop-volume.esc { display:none; }
+  .pop-topo { display:flex; align-items:center; justify-content:space-between; }
+  #pop-fechar { background:none; border:none; color:var(--sub); font-size:16px; }
+  .pop-linha { display:flex; align-items:center; gap:8px; }
+  #pop-slider { flex:1; accent-color:var(--verde); }
+  #pop-valor { width:42px; text-align:right; font-variant-numeric:tabular-nums; font-size:13px; }
+  .pop-botoes { display:flex; gap:6px; } .pop-botoes .btn { flex:1; padding:7px; font-size:13px; }
+  #pop-volume small { color:var(--sub); font-size:11px; }
   .modal { position:fixed; inset:0; background:#000b; display:flex; align-items:center; justify-content:center; z-index:20; }
   .modal .caixa { background:var(--bg2); padding:22px; border-radius:14px; width:min(440px, 92vw); display:flex; flex-direction:column; gap:12px; }
   .modal h3 { margin:0; }
@@ -277,6 +290,13 @@
   <aside id="membros"></aside>
 </div>
 
+<div id="pop-volume" class="esc">
+  <div class="pop-topo"><b id="pop-nome"></b><button id="pop-fechar" title="Fechar">✕</button></div>
+  <div class="pop-linha"><span>🔈</span><input type="range" id="pop-slider" min="0" max="200" step="5" value="100"><span id="pop-valor">100%</span></div>
+  <div class="pop-botoes"><button class="btn sec" id="pop-mudo">🔇 Silenciar pra mim</button><button class="btn sec" id="pop-reset">100%</button></div>
+  <small>Só muda pra você. Os outros continuam ouvindo normal.</small>
+</div>
+
 <div id="config" class="modal esc">
   <div class="caixa">
     <h3>⚙️ Voz e vídeo</h3>
@@ -339,7 +359,7 @@ function tratar(m) {
       break;
     case "usuarios":
       usuarios = m.lista;
-      renderMembros(); renderVozSidebar(); sincronizarPeers(); atualizarBlocos(); infoParaJogo(); renderAssistindo();
+      renderMembros(); renderVozSidebar(); sincronizarPeers(); aplicarVolumes(); atualizarBlocos(); infoParaJogo(); renderAssistindo();
       break;
     case "msg":
       (historico[m.canal] ||= []).push(m);
@@ -417,12 +437,14 @@ function renderMembros() {
     const n = document.createElement("span"); n.textContent = u.nome + (u.id === eu.id ? " (você)" : "");
     const i = document.createElement("span"); i.className = "icones"; i.textContent = iconesMembro(u);
     d.append(av, n, i); el.appendChild(d);
+    if (u.voz && u.id !== eu.id) { d.classList.add("clicavel"); d.title = "Ajustar volume"; d.onclick = (e) => abrirVolume(u.id, e); }
   }
 }
 function renderVozSidebar() {
   const el = $("lista-voz-sidebar"); el.replaceChildren();
   for (const u of usuarios.filter((u) => u.voz)) {
-    const d = document.createElement("div"); d.className = "voz-user"; d.dataset.fala = u.id; d.textContent = u.nome + " " + icones(u).replace("🔊", "");
+    const d = document.createElement("div"); d.className = "voz-user"; d.dataset.fala = u.id; d.textContent = u.nome + " " + icones(u).replace("🔊", "") + (u.id === eu.id ? "" : tagVolume(u.nome));
+    if (u.id !== eu.id) { d.classList.add("clicavel"); d.title = "Ajustar volume"; d.onclick = (e) => abrirVolume(u.id, e); }
     el.appendChild(d);
   }
 }
@@ -433,7 +455,10 @@ let ctxAudio, focoEl = null, streamTeste = null;
 
 // Navegadores só liberam áudio depois de um clique
 function garantirAudio() {
-  try { ctxAudio ||= new AudioContext(); if (ctxAudio.state === "suspended") ctxAudio.resume(); } catch {}
+  try {
+    if (!ctxAudio) { ctxAudio = new AudioContext(); if (pref.saida) ctxAudio.setSinkId?.(pref.saida).catch(() => {}); }
+    if (ctxAudio.state === "suspended") ctxAudio.resume();
+  } catch {}
 }
 document.addEventListener("click", garantirAudio);
 
@@ -545,6 +570,7 @@ async function trocarCam(id) {
 }
 function trocarSaida(id) {
   pref.saida = id; salvarLocal("salinha-saida", id);
+  ctxAudio?.setSinkId?.(id || "").catch(() => {});
   document.querySelectorAll("#grade audio, #grade video:not([muted])").forEach((el) => el.setSinkId?.(id).catch(() => {}));
 }
 
@@ -629,11 +655,12 @@ function adicionarRemoto(peerId, stream) {
       r.el = document.createElement("div"); r.el.className = "esc";
       const a = document.createElement("audio"); a.autoplay = true; a.srcObject = stream;
       if (pref.saida) a.setSinkId?.(pref.saida).catch(() => {});
-      r.el.appendChild(a);
+      r.el.appendChild(a); r.audioEl = a;
       detectarFala(stream, "r-" + stream.id, peerId);
     }
     $("grade").appendChild(r.el);
   }
+  aplicarVolumeRemoto(r);
   atualizarBlocos();
 }
 
@@ -653,6 +680,11 @@ function criarBlocoVideo(stream, { local = false, espelhar = false }) {
   b.onclick = () => focar(b);
   b.ondblclick = () => fs.click();
   b.append(v, l, fs);
+  if (!local) {
+    const vb = document.createElement("button"); vb.className = "tela-cheia btn-vol-bloco"; vb.title = "Volume dessa pessoa"; vb.textContent = "🔊";
+    vb.onclick = (e) => abrirVolume(b.dataset.peer, e);
+    b.appendChild(vb);
+  }
   return b;
 }
 
@@ -680,7 +712,7 @@ function atualizarBlocos() {
       if (!b.dataset.vistoTela) { b.dataset.vistoTela = "1"; if (!focoEl) focoEl = b; } // abre grande sozinho
     } else {
       comCam.add(b.dataset.peer); b.dataset.fala = b.dataset.peer;
-      b.querySelector(".rotulo").textContent = (dono?.nome || "…") + " " + (dono ? icones(dono).replace("🔊", "") : "");
+      b.querySelector(".rotulo").textContent = (dono?.nome || "…") + " " + (dono ? icones(dono).replace("🔊", "") + tagVolume(dono.nome) : "");
     }
   });
   // vídeos locais (prévia)
@@ -705,6 +737,7 @@ function atualizarBlocos() {
     let b = $("av-" + u.id);
     if (!b) {
       b = document.createElement("div"); b.className = "bloco av"; b.id = "av-" + u.id;
+      b.onclick = (e) => abrirVolume(b.dataset.peer, e);
       const a = document.createElement("div"); a.className = "avatar"; b.appendChild(a);
       const l = document.createElement("div"); l.className = "rotulo"; b.appendChild(l);
       grade.prepend(b);
@@ -712,10 +745,70 @@ function atualizarBlocos() {
     b.dataset.fala = u.id;
     b.classList.toggle("esc", comCam.has(u.id));
     b.querySelector(".avatar").textContent = inicial(u.nome); b.querySelector(".avatar").style.background = cor(u.nome);
-    b.querySelector(".rotulo").textContent = (u.id === eu.id ? "Você" : u.nome) + " " + icones(u).replace("🔊", "");
+    b.querySelector(".rotulo").textContent = (u.id === eu.id ? "Você" : u.nome) + " " + icones(u).replace("🔊", "") + (u.id === eu.id ? "" : tagVolume(u.nome));
+    b.dataset.peer = u.id;
   }
   aplicarFoco();
 }
+
+// ---- Volume de cada pessoa (só pra você) ----
+// Até 100% usa o volume normal do áudio; acima disso passa por um amplificador (Web Audio).
+let volumes = {};
+try { volumes = JSON.parse(lerLocal("salinha-volumes") || "{}"); } catch {}
+const volumeDe = (nome) => (typeof volumes[nome] === "number" ? volumes[nome] : 1);
+function tagVolume(nome) {
+  const v = volumeDe(nome);
+  return v === 0 ? " 🔇" : v !== 1 ? ` 🔉${Math.round(v * 100)}%` : "";
+}
+function aplicarVolumeRemoto(r) {
+  const v = volumeDe(nomeDe(r.peerId));
+  const vid = r.el?.querySelector?.("video");
+  if (vid) vid.volume = Math.min(1, v); // áudio da tela compartilhada
+  const a = r.audioEl; if (!a) return;
+  if (v <= 1) {
+    a.muted = false; a.volume = v;
+    if (r.ganho) r.ganho.gain.value = 0;
+  } else {
+    garantirAudio();
+    try {
+      if (!r.ganho) {
+        r.ganho = ctxAudio.createGain();
+        ctxAudio.createMediaStreamSource(r.stream).connect(r.ganho).connect(ctxAudio.destination);
+      }
+      r.ganho.gain.value = v; a.muted = true; // o elemento continua ligado (o Chrome precisa disso)
+    } catch { a.muted = false; a.volume = 1; }
+  }
+}
+function aplicarVolumes() { for (const r of remotos.values()) aplicarVolumeRemoto(r); }
+function definirVolume(nome, v) {
+  if (v === 1) delete volumes[nome]; else volumes[nome] = v;
+  salvarLocal("salinha-volumes", JSON.stringify(volumes));
+  aplicarVolumes(); atualizarBlocos(); renderVozSidebar();
+}
+
+let popNome = null;
+function abrirVolume(peerId, ev) {
+  if (!peerId || peerId === eu.id) return;
+  const u = usuarios.find((x) => x.id === peerId); if (!u) return;
+  ev?.stopPropagation();
+  popNome = u.nome;
+  const pop = $("pop-volume");
+  $("pop-nome").textContent = u.nome;
+  atualizarPop();
+  pop.classList.remove("esc");
+  const x = ev?.clientX ?? innerWidth / 2, y = ev?.clientY ?? innerHeight / 2;
+  const w = pop.offsetWidth, h = pop.offsetHeight;
+  pop.style.left = Math.max(8, Math.min(x - w / 2, innerWidth - w - 8)) + "px";
+  pop.style.top = Math.max(8, Math.min(y + 12, innerHeight - h - 8)) + "px";
+}
+function atualizarPop() {
+  if (!popNome) return;
+  const v = volumeDe(popNome);
+  $("pop-slider").value = Math.round(v * 100);
+  $("pop-valor").textContent = Math.round(v * 100) + "%";
+  $("pop-mudo").textContent = v === 0 ? "🔊 Reativar" : "🔇 Silenciar pra mim";
+}
+function fecharVolume() { $("pop-volume").classList.add("esc"); popNome = null; }
 
 // ---- Detector de fala: acende verde em quem está falando ----
 const analisadores = {}; // chave -> { an, src, id, ultimo }
@@ -1203,6 +1296,12 @@ document.querySelectorAll(".instalar").forEach((b) => (b.onclick = async () => {
   document.querySelectorAll(".instalar").forEach((x) => x.classList.add("esc"));
 }));
 
+$("pop-slider").oninput = (e) => { if (popNome) { definirVolume(popNome, +e.target.value / 100); atualizarPop(); } };
+$("pop-mudo").onclick = () => { if (popNome) { definirVolume(popNome, volumeDe(popNome) === 0 ? 1 : 0); atualizarPop(); } };
+$("pop-reset").onclick = () => { if (popNome) { definirVolume(popNome, 1); atualizarPop(); } };
+$("pop-fechar").onclick = fecharVolume;
+document.addEventListener("click", (e) => { if (popNome && !$("pop-volume").contains(e.target)) fecharVolume(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") fecharVolume(); });
 $("menu-btn").onclick = () => $("lateral").classList.toggle("aberto");
 </script>
 </body>
