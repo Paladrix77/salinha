@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jogo da velha</title>
+<style>
+  body { margin: 0; font-family: system-ui, sans-serif; background: #1e1f24; color: #e6e6eb; display: flex; flex-direction: column; align-items: center; padding: 20px; gap: 14px; }
+  h2 { margin: 0; }
+  #tab { display: grid; grid-template-columns: repeat(3, 90px); gap: 8px; }
+  .c { width: 90px; height: 90px; background: #2b2d35; border: none; border-radius: 12px; font-size: 48px; font-weight: 800; color: #fff; cursor: pointer; }
+  .c:hover { background: #353844; }
+  .c.x { color: #7c8cff; } .c.o { color: #ff8a7c; }
+  .lados { display: flex; gap: 10px; }
+  button.b { background: #5865f2; color: #fff; border: none; padding: 9px 14px; border-radius: 8px; font-weight: 600; cursor: pointer; }
+  button.b.sec { background: #3a3d48; }
+  #status { min-height: 1.4em; color: #b8bac4; text-align: center; }
+</style>
+</head>
+<body>
+  <h2>Jogo da velha</h2>
+  <div class="lados">
+    <button class="b" id="serX">Jogar de X</button>
+    <button class="b" id="serO">Jogar de O</button>
+  </div>
+  <div id="status">Conectando…</div>
+  <div id="tab"></div>
+  <button class="b sec" id="reiniciar">Nova partida</button>
+
+<script src="/jogos/salinha-sdk.js"></script>
+<script>
+  const novo = (v) => ({ v, casas: Array(9).fill(""), vez: "X", X: null, O: null, nomeX: "", nomeO: "", fim: "" });
+  let estado = novo(0);
+  const LINHAS = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+  const tab = document.getElementById("tab");
+  const casasEl = [...Array(9)].map((_, i) => {
+    const b = document.createElement("button");
+    b.className = "c";
+    b.onclick = () => jogar(i);
+    tab.appendChild(b);
+    return b;
+  });
+
+  function publicar() { estado.v++; Salinha.enviar({ estado }); desenhar(); }
+
+  function jogar(i) {
+    const eu = Salinha.eu; if (!eu || estado.fim || estado.casas[i]) return;
+    if (estado[estado.vez] !== eu.id) return;
+    estado.casas[i] = estado.vez;
+    const venceu = LINHAS.find((l) => l.every((k) => estado.casas[k] === estado.vez));
+    if (venceu) estado.fim = estado.vez;
+    else if (estado.casas.every(Boolean)) estado.fim = "empate";
+    else estado.vez = estado.vez === "X" ? "O" : "X";
+    publicar();
+  }
+
+  function escolher(lado) {
+    const eu = Salinha.eu; if (!eu) return;
+    const outro = lado === "X" ? "O" : "X";
+    if (estado[outro] === eu.id) { estado[outro] = null; estado["nome" + outro] = ""; }
+    estado[lado] = eu.id; estado["nome" + lado] = eu.nome;
+    publicar();
+  }
+
+  function desenhar() {
+    estado.casas.forEach((v, i) => { casasEl[i].textContent = v; casasEl[i].className = "c " + v.toLowerCase(); });
+    const s = document.getElementById("status");
+    const x = estado.nomeX || "(vago)", o = estado.nomeO || "(vago)";
+    if (estado.fim === "empate") s.textContent = `Empate! X: ${x} · O: ${o}`;
+    else if (estado.fim) s.textContent = `🏆 ${estado["nome" + estado.fim]} (${estado.fim}) venceu!`;
+    else s.textContent = `X: ${x} · O: ${o} — vez do ${estado.vez}` + (estado[estado.vez] === Salinha.eu?.id ? " (você!)" : "");
+  }
+
+  document.getElementById("serX").onclick = () => escolher("X");
+  document.getElementById("serO").onclick = () => escolher("O");
+  document.getElementById("reiniciar").onclick = () => {
+    const { X, O, nomeX, nomeO } = estado;
+    estado = { ...novo(estado.v), X, O, nomeX, nomeO };
+    publicar();
+  };
+
+  Salinha.aoReceber((dados) => {
+    if (dados.pedirEstado) { if (estado.v > 0) Salinha.enviar({ estado }); return; }
+    if (dados.estado && dados.estado.v > estado.v) { estado = dados.estado; desenhar(); }
+  });
+  Salinha.aoFicarPronto(() => { Salinha.enviar({ pedirEstado: true }); desenhar(); });
+</script>
+</body>
+</html>

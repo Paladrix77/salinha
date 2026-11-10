@@ -1,0 +1,18 @@
+name = "salinha"
+main = "src/worker.js"
+compatibility_date = "2025-06-01"
+
+# Arquivos do site (HTML, jogos)
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
+# Cada "servidor" da Salinha é um Durable Object (guarda chat e conecta as pessoas)
+[[durable_objects.bindings]]
+name = "SALA"
+class_name = "Sala"
+
+# new_sqlite_classes = funciona no plano GRÁTIS da Cloudflare
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Sala"]

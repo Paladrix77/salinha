@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Salinha</title>
+<style>
+  :root { --bg0:#16171b; --bg1:#1e1f24; --bg2:#26282e; --bg3:#30333b; --txt:#e6e6eb; --sub:#9a9ca8; --azul:#5865f2; --verde:#3ba55d; --verm:#ed4245; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; height:100%; background:var(--bg1); color:var(--txt); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+  button { font: inherit; cursor: pointer; }
+  input { font: inherit; }
+  .esc { display:none !important; }
+
+  /* Login */
+  #login { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:radial-gradient(circle at 30% 20%, #2c2f6b, var(--bg0) 60%); z-index:10; }
+  #login form { background:var(--bg2); padding:28px; border-radius:16px; width:min(360px, 92vw); display:flex; flex-direction:column; gap:12px; box-shadow:0 20px 60px #0008; }
+  #login h1 { margin:0; font-size:26px; } #login p { margin:0; color:var(--sub); }
+  .campo { background:var(--bg0); border:1px solid var(--bg3); color:var(--txt); padding:11px 12px; border-radius:8px; outline:none; }
+  .campo:focus { border-color:var(--azul); }
+  .btn { background:var(--azul); color:#fff; border:none; padding:10px 14px; border-radius:8px; font-weight:600; }
+  .btn.sec { background:var(--bg3); } .btn.verm { background:var(--verm); } .btn.on { background:var(--verde); }
+
+  /* Layout */
+  #app { display:flex; height:100%; }
+  #lateral { width:240px; background:var(--bg0); display:flex; flex-direction:column; flex-shrink:0; }
+  #lateral h2 { margin:0; padding:16px; font-size:16px; border-bottom:1px solid #000; }
+  .secao { padding:14px 8px 4px; font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--sub); font-weight:700; }
+  .item { display:flex; align-items:center; gap:8px; width:100%; text-align:left; background:none; border:none; color:var(--sub); padding:7px 10px; border-radius:6px; margin:1px 0; }
+  .item:hover { background:var(--bg2); color:var(--txt); }
+  .item.ativo { background:var(--bg3); color:#fff; }
+  .badge { margin-left:auto; background:var(--verm); color:#fff; font-size:11px; padding:1px 6px; border-radius:10px; }
+  #lista-canais, #lista-voz-sidebar { padding:0 8px; }
+  .voz-user { padding:3px 10px 3px 30px; font-size:13px; color:var(--sub); display:flex; gap:6px; }
+  #rodape { margin-top:auto; padding:10px; background:#111215; display:flex; flex-direction:column; gap:8px; }
+  #barra-voz { background:var(--bg2); border-radius:8px; padding:8px; display:flex; flex-direction:column; gap:6px; }
+  #barra-voz .ok { color:var(--verde); font-size:13px; font-weight:600; }
+  #barra-voz .linha { display:flex; gap:6px; } #barra-voz .linha .btn { flex:1; padding:6px; }
+  #eu-nome { font-weight:600; font-size:14px; }
+
+  #principal { flex:1; display:flex; flex-direction:column; min-width:0; }
+  #topo { height:50px; display:flex; align-items:center; gap:10px; padding:0 16px; border-bottom:1px solid #0006; font-weight:700; }
+  #menu-btn { display:none; background:none; border:none; color:var(--txt); font-size:22px; }
+  .vista { flex:1; display:flex; flex-direction:column; min-height:0; }
+
+  /* Chat */
+  #mensagens { flex:1; overflow-y:auto; padding:12px 16px; }
+  .msg { padding:4px 0; }
+  .msg .cab { display:flex; gap:8px; align-items:baseline; }
+  .msg .autor { font-weight:700; } .msg .hora { color:var(--sub); font-size:11px; }
+  .msg .texto { white-space:pre-wrap; word-wrap:break-word; color:#dcdde3; }
+  .msg.bot .autor::after { content:"BOT"; background:var(--azul); color:#fff; font-size:10px; padding:1px 4px; border-radius:3px; margin-left:6px; vertical-align:middle; }
+  .sistema { color:var(--sub); font-size:13px; font-style:italic; padding:3px 0; }
+  #form-msg { padding:0 16px 16px; }
+  #form-msg input { width:100%; }
+
+  /* Voz */
+  #grade { flex:1; overflow-y:auto; padding:16px; display:grid; gap:12px; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); align-content:start; }
+  .bloco { position:relative; background:var(--bg0); border-radius:12px; aspect-ratio:16/9; overflow:hidden; display:flex; align-items:center; justify-content:center; border:2px solid transparent; }
+  .bloco video { width:100%; height:100%; object-fit:contain; background:#000; }
+  .bloco .rotulo { position:absolute; left:8px; bottom:8px; background:#000a; padding:3px 8px; border-radius:6px; font-size:13px; }
+  .bloco .avatar { width:72px; height:72px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:30px; font-weight:800; color:#fff; }
+  .bloco.falando { border-color:var(--verde); }
+  #controles { display:flex; gap:10px; justify-content:center; padding:14px; flex-wrap:wrap; background:var(--bg0); }
+  #voz-vazia { padding:40px; text-align:center; color:var(--sub); }
+
+  /* Jogos */
+  #lista-jogos { display:flex; gap:10px; padding:12px 16px; flex-wrap:wrap; border-bottom:1px solid #0006; }
+  #quadro-jogo { flex:1; border:none; width:100%; background:var(--bg1); }
+  #sem-jogo { padding:40px; text-align:center; color:var(--sub); }
+
+  /* Membros */
+  #membros { width:220px; background:var(--bg2); padding:8px; overflow-y:auto; flex-shrink:0; }
+  .membro { display:flex; align-items:center; gap:8px; padding:6px; border-radius:6px; font-size:14px; }
+  .mini { width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:13px; color:#fff; flex-shrink:0; }
+  .icones { margin-left:auto; font-size:12px; }
+
+  @media (max-width: 800px) {
+    #membros { display:none; }
+    #menu-btn { display:block; }
+    #lateral { position:fixed; inset:0 auto 0 0; z-index:5; transform:translateX(-100%); transition:transform .2s; box-shadow:10px 0 30px #0008; }
+    #lateral.aberto { transform:none; }
+    #grade { grid-template-columns:1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div id="login">
+  <form id="form-login">
+    <h1>🛋️ Salinha</h1>
+    <p>Chat, call, câmera, tela e jogos com a galera.</p>
+    <input class="campo" id="campo-nome" placeholder="Seu apelido" maxlength="24" required autofocus>
+    <button class="btn" type="submit">Entrar</button>
+  </form>
+</div>
+
+<div id="app" class="esc">
+  <nav id="lateral">
+    <h2 id="nome-servidor">🛋️ Salinha</h2>
+    <div class="secao">Canais de texto</div>
+    <div id="lista-canais"></div>
+    <div class="secao">Voz</div>
+    <div style="padding:0 8px"><button class="item" id="item-voz">🔊 Sala de voz</button></div>
+    <div id="lista-voz-sidebar"></div>
+    <div class="secao">Jogos</div>
+    <div style="padding:0 8px"><button class="item" id="item-jogos">🎮 Jogos</button></div>
+    <div id="rodape">
+      <div id="barra-voz" class="esc">
+        <span class="ok">● Conectado à voz</span>
+        <div class="linha">
+          <button class="btn sec" id="mini-mic" title="Microfone">🎤</button>
+          <button class="btn verm" id="mini-sair" title="Sair da call">📞</button>
+        </div>
+      </div>
+      <div id="eu-nome"></div>
+    </div>
+  </nav>
+
+  <main id="principal">
+    <div id="topo"><button id="menu-btn">☰</button><span id="titulo"># geral</span></div>
+
+    <section id="vista-texto" class="vista">
+      <div id="mensagens"></div>
+      <form id="form-msg"><input class="campo" id="campo-msg" placeholder="Mensagem (digite !ajuda pros comandos do bot)" autocomplete="off" maxlength="2000"></form>
+    </section>
+
+    <section id="vista-voz" class="vista esc">
+      <div id="voz-vazia">
+        <p>Ninguém te ouvindo ainda 👀</p>
+        <button class="btn" id="btn-entrar-voz">Entrar na call</button>
+      </div>
+      <div id="grade" class="esc"></div>
+      <div id="controles" class="esc">
+        <button class="btn on" id="btn-mic">🎤 Microfone</button>
+        <button class="btn sec" id="btn-cam">📷 Câmera</button>
+        <button class="btn sec" id="btn-tela">🖥️ Tela</button>
+        <button class="btn verm" id="btn-sair">Sair da call</button>
+      </div>
+    </section>
+
+    <section id="vista-jogos" class="vista esc">
+      <div id="lista-jogos"></div>
+      <div id="sem-jogo">Escolha um jogo acima. Todo mundo que abrir o mesmo jogo joga junto.</div>
+      <iframe id="quadro-jogo" class="esc" allow="autoplay; fullscreen; gamepad"></iframe>
+    </section>
+  </main>
+
+  <aside id="membros"></aside>
+</div>
+
+<script>
+// =================== CONFIG ===================
+// Jogos disponíveis. Pra adicionar o seu: coloque o arquivo em public/jogos/ e adicione aqui.
+const JOGOS = [
+  { id: "velha", nome: "❌⭕ Jogo da velha", url: "/jogos/velha.html" },
+];
+const ICE = [{ urls: ["stun:stun.cloudflare.com:3478", "stun:stun.l.google.com:19302"] }];
+const SERVIDOR = new URLSearchParams(location.search).get("servidor") || "principal";
+
+// =================== ESTADO ===================
+const $ = (id) => document.getElementById(id);
+let ws, eu = { id: null, nome: "" }, usuarios = [], canais = [], historico = {}, naoLidas = {};
+let vista = "texto", canalAtual = "geral", jogoAtual = null, conectadoAntes = false;
+let emVoz = false, streamMic = null, streamCam = null, streamTela = null;
+const peers = new Map();      // id -> { pc, polite, makingOffer, ignoreOffer, senders }
+const remotos = new Map();    // streamId -> { peerId, stream, el }
+
+// =================== UTIL ===================
+function cor(nome) { let h = 0; for (const c of nome || "") h = (h * 31 + c.charCodeAt(0)) % 360; return `hsl(${h} 55% 50%)`; }
+function inicial(nome) { return (nome || "?").trim().charAt(0).toUpperCase(); }
+function nomeDe(id) { return usuarios.find((u) => u.id === id)?.nome || "…"; }
+function enviar(obj) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(obj)); }
+function salvarLocal(k, v) { try { localStorage.setItem(k, v); } catch {} }
+function lerLocal(k) { try { return localStorage.getItem(k); } catch { return null; } }
+function hora(ts) { return new Date(ts).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }); }
+
+// =================== CONEXÃO ===================
+function conectar() {
+  ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws?servidor=${encodeURIComponent(SERVIDOR)}`);
+  ws.onopen = () => enviar({ t: "entrar", nome: eu.nome });
+  ws.onmessage = (e) => tratar(JSON.parse(e.data));
+  ws.onclose = () => {
+    if (emVoz) sairVoz(true);
+    adicionarSistema("Conexão perdida, reconectando…");
+    setTimeout(conectar, 2000);
+  };
+}
+
+function tratar(m) {
+  switch (m.t) {
+    case "bemvindo":
+      eu.id = m.id; canais = m.canais; historico = m.historico;
+      $("eu-nome").textContent = "👤 " + eu.nome;
+      renderCanais(); renderMensagens();
+      if (conectadoAntes) adicionarSistema("Reconectado!");
+      conectadoAntes = true;
+      break;
+    case "usuarios":
+      usuarios = m.lista;
+      renderMembros(); renderVozSidebar(); sincronizarPeers(); atualizarBlocos(); infoParaJogo();
+      break;
+    case "msg":
+      (historico[m.canal] ||= []).push(m);
+      if (historico[m.canal].length > 200) historico[m.canal].shift();
+      if (vista === "texto" && m.canal === canalAtual) adicionarMsgEl(m);
+      else { naoLidas[m.canal] = (naoLidas[m.canal] || 0) + 1; renderCanais(); }
+      break;
+    case "sistema": adicionarSistema(m.texto); break;
+    case "sinal": tratarSinal(m.de, m.dados); break;
+    case "jogo":
+      if (jogoAtual && m.jogo === jogoAtual.id) $("quadro-jogo").contentWindow?.postMessage({ salinha: true, tipo: "recebido", de: m.de, nome: m.nome, dados: m.dados }, "*");
+      break;
+  }
+}
+
+// =================== NAVEGAÇÃO ===================
+function mostrar(qual) {
+  vista = qual;
+  for (const v of ["texto", "voz", "jogos"]) $("vista-" + v).classList.toggle("esc", v !== qual);
+  $("item-voz").classList.toggle("ativo", qual === "voz");
+  $("item-jogos").classList.toggle("ativo", qual === "jogos");
+  $("titulo").textContent = qual === "texto" ? "# " + canalAtual : qual === "voz" ? "🔊 Sala de voz" : "🎮 Jogos" + (jogoAtual ? " — " + jogoAtual.nome : "");
+  if (qual === "texto") { naoLidas[canalAtual] = 0; renderMensagens(); }
+  renderCanais();
+  $("lateral").classList.remove("aberto");
+}
+
+function renderCanais() {
+  const el = $("lista-canais"); el.replaceChildren();
+  for (const c of canais) {
+    const b = document.createElement("button");
+    b.className = "item" + (vista === "texto" && c === canalAtual ? " ativo" : "");
+    b.textContent = "# " + c;
+    if (naoLidas[c]) { const s = document.createElement("span"); s.className = "badge"; s.textContent = naoLidas[c]; b.appendChild(s); }
+    b.onclick = () => { canalAtual = c; mostrar("texto"); };
+    el.appendChild(b);
+  }
+}
+
+// =================== CHAT ===================
+function criarMsgEl(m) {
+  const d = document.createElement("div"); d.className = "msg" + (m.bot ? " bot" : "");
+  const cab = document.createElement("div"); cab.className = "cab";
+  const a = document.createElement("span"); a.className = "autor"; a.textContent = m.autor; a.style.color = m.bot ? "#8ea1ff" : cor(m.autor);
+  const h = document.createElement("span"); h.className = "hora"; h.textContent = hora(m.ts);
+  const t = document.createElement("div"); t.className = "texto"; t.textContent = m.texto;
+  cab.append(a, h); d.append(cab, t); return d;
+}
+function renderMensagens() {
+  const el = $("mensagens");
+  el.replaceChildren(...(historico[canalAtual] || []).map(criarMsgEl));
+  el.scrollTop = el.scrollHeight;
+}
+function adicionarMsgEl(m) {
+  const el = $("mensagens"); const noFim = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  el.appendChild(criarMsgEl(m)); if (noFim) el.scrollTop = el.scrollHeight;
+}
+function adicionarSistema(texto) {
+  if (vista !== "texto") return;
+  const d = document.createElement("div"); d.className = "sistema"; d.textContent = "— " + texto;
+  $("mensagens").appendChild(d); $("mensagens").scrollTop = $("mensagens").scrollHeight;
+}
+
+// =================== MEMBROS ===================
+function icones(u) { if (!u.voz) return ""; return "🔊" + (u.midia?.mic === false ? "🔇" : "") + (u.midia?.cam ? "📷" : "") + (u.midia?.tela ? "🖥️" : ""); }
+function renderMembros() {
+  const el = $("membros"); el.replaceChildren();
+  const t = document.createElement("div"); t.className = "secao"; t.textContent = `Online — ${usuarios.length}`; el.appendChild(t);
+  for (const u of usuarios) {
+    const d = document.createElement("div"); d.className = "membro";
+    const av = document.createElement("div"); av.className = "mini"; av.style.background = cor(u.nome); av.textContent = inicial(u.nome);
+    const n = document.createElement("span"); n.textContent = u.nome + (u.id === eu.id ? " (você)" : "");
+    const i = document.createElement("span"); i.className = "icones"; i.textContent = icones(u);
+    d.append(av, n, i); el.appendChild(d);
+  }
+}
+function renderVozSidebar() {
+  const el = $("lista-voz-sidebar"); el.replaceChildren();
+  for (const u of usuarios.filter((u) => u.voz)) {
+    const d = document.createElement("div"); d.className = "voz-user"; d.textContent = u.nome + " " + icones(u).replace("🔊", "");
+    el.appendChild(d);
+  }
+}
+
+// =================== VOZ / VÍDEO (WebRTC direto entre navegadores) ===================
+async function entrarVoz() {
+  if (emVoz) return;
+  try {
+    streamMic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+    detectarFala(streamMic, "local-mic");
+  } catch (e) { alert("Não consegui acessar o microfone (" + e.message + "). Você vai entrar só ouvindo."); streamMic = null; }
+  emVoz = true;
+  enviar({ t: "voz", ativo: true });
+  enviarMidia();
+  for (const u of usuarios) if (u.voz && u.id !== eu.id) criarPeer(u.id);
+  atualizarUIVoz();
+}
+
+function sairVoz(silencioso) {
+  for (const id of [...peers.keys()]) fecharPeer(id);
+  for (const s of [streamMic, streamCam, streamTela]) s?.getTracks().forEach((t) => t.stop());
+  streamMic = streamCam = streamTela = null;
+  emVoz = false;
+  if (!silencioso) enviar({ t: "voz", ativo: false });
+  $("grade").replaceChildren();
+  atualizarUIVoz();
+}
+
+function enviarMidia() {
+  enviar({ t: "midia", mic: !!streamMic?.getAudioTracks()[0]?.enabled, cam: !!streamCam, tela: !!streamTela });
+}
+
+function atualizarUIVoz() {
+  $("voz-vazia").classList.toggle("esc", emVoz);
+  $("grade").classList.toggle("esc", !emVoz);
+  $("controles").classList.toggle("esc", !emVoz);
+  $("barra-voz").classList.toggle("esc", !emVoz);
+  const micOn = !!streamMic?.getAudioTracks()[0]?.enabled;
+  $("btn-mic").className = "btn " + (micOn ? "on" : "verm"); $("btn-mic").textContent = micOn ? "🎤 Microfone" : "🔇 Mudo";
+  $("mini-mic").textContent = micOn ? "🎤" : "🔇";
+  $("btn-cam").className = "btn " + (streamCam ? "on" : "sec");
+  $("btn-tela").className = "btn " + (streamTela ? "on" : "sec");
+  atualizarBlocos();
+}
+
+function alternarMic() {
+  const t = streamMic?.getAudioTracks()[0];
+  if (!t) return alert("Sem microfone. Saia e entre na call de novo pra tentar outra vez.");
+  t.enabled = !t.enabled; enviarMidia(); atualizarUIVoz();
+}
+
+async function alternarCam() {
+  if (streamCam) { removerStream("cam"); streamCam.getTracks().forEach((t) => t.stop()); streamCam = null; }
+  else {
+    try { streamCam = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 640 }, height: { ideal: 360 }, frameRate: { ideal: 24 } } }); }
+    catch (e) { return alert("Não consegui abrir a câmera: " + e.message); }
+    adicionarStream("cam", streamCam);
+  }
+  enviarMidia(); atualizarUIVoz();
+}
+
+async function alternarTela() {
+  if (streamTela) return pararTela();
+  if (!navigator.mediaDevices.getDisplayMedia) return alert("Seu navegador não permite compartilhar a tela (no celular geralmente não funciona). Use no PC.");
+  try { streamTela = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: 15 } }, audio: true }); }
+  catch { return; }
+  streamTela.getVideoTracks()[0].onended = pararTela;
+  adicionarStream("tela", streamTela);
+  enviarMidia(); atualizarUIVoz();
+}
+function pararTela() {
+  if (!streamTela) return;
+  removerStream("tela"); streamTela.getTracks().forEach((t) => t.stop()); streamTela = null;
+  enviarMidia(); atualizarUIVoz();
+}
+
+function adicionarStream(tipo, stream) {
+  for (const p of peers.values()) p.senders[tipo] = stream.getTracks().map((t) => p.pc.addTrack(t, stream));
+}
+function removerStream(tipo) {
+  for (const p of peers.values()) { (p.senders[tipo] || []).forEach((s) => { try { p.pc.removeTrack(s); } catch {} }); p.senders[tipo] = []; }
+}
+
+function sincronizarPeers() {
+  if (!emVoz) return;
+  const naVoz = new Set(usuarios.filter((u) => u.voz && u.id !== eu.id).map((u) => u.id));
+  for (const id of naVoz) criarPeer(id);
+  for (const id of [...peers.keys()]) if (!naVoz.has(id)) fecharPeer(id);
+}
+
+function criarPeer(id) {
+  if (peers.has(id)) return peers.get(id);
+  const pc = new RTCPeerConnection({ iceServers: ICE });
+  const p = { pc, polite: eu.id < id, makingOffer: false, ignoreOffer: false, senders: {} };
+  peers.set(id, p);
+  pc.onicecandidate = (e) => { if (e.candidate) enviar({ t: "sinal", para: id, dados: { candidate: e.candidate } }); };
+  pc.onnegotiationneeded = async () => {
+    try { p.makingOffer = true; await pc.setLocalDescription(); enviar({ t: "sinal", para: id, dados: { description: pc.localDescription } }); }
+    catch (e) { console.error(e); } finally { p.makingOffer = false; }
+  };
+  pc.ontrack = ({ track, streams }) => adicionarRemoto(id, streams[0] || new MediaStream([track]));
+  pc.onconnectionstatechange = () => { if (pc.connectionState === "failed") pc.restartIce(); };
+  if (streamMic) p.senders.mic = streamMic.getTracks().map((t) => pc.addTrack(t, streamMic));
+  if (streamCam) p.senders.cam = streamCam.getTracks().map((t) => pc.addTrack(t, streamCam));
+  if (streamTela) p.senders.tela = streamTela.getTracks().map((t) => pc.addTrack(t, streamTela));
+  return p;
+}
+
+function fecharPeer(id) {
+  const p = peers.get(id); if (!p) return;
+  p.pc.close(); peers.delete(id);
+  for (const [sid, r] of remotos) if (r.peerId === id) { r.el.remove(); remotos.delete(sid); }
+  atualizarBlocos();
+}
+
+// "Perfect negotiation": evita conflito quando os dois lados mandam oferta ao mesmo tempo
+async function tratarSinal(de, { description, candidate }) {
+  if (!emVoz) return;
+  const p = criarPeer(de), pc = p.pc;
+  try {
+    if (description) {
+      const colisao = description.type === "offer" && (p.makingOffer || pc.signalingState !== "stable");
+      p.ignoreOffer = !p.polite && colisao;
+      if (p.ignoreOffer) return;
+      await pc.setRemoteDescription(description);
+      if (description.type === "offer") {
+        await pc.setLocalDescription();
+        enviar({ t: "sinal", para: de, dados: { description: pc.localDescription } });
+      }
+    } else if (candidate) {
+      try { await pc.addIceCandidate(candidate); } catch (e) { if (!p.ignoreOffer) console.warn(e); }
+    }
+  } catch (e) { console.error(e); }
+}
+
+function adicionarRemoto(peerId, stream) {
+  let r = remotos.get(stream.id);
+  if (!r) {
+    r = { peerId, stream, el: document.createElement("div") };
+    remotos.set(stream.id, r);
+    stream.onremovetrack = () => { if (!stream.getTracks().some((t) => t.readyState === "live")) { r.el.remove(); remotos.delete(stream.id); } atualizarBlocos(); };
+  }
+  montarMidia(r);
+  atualizarBlocos();
+}
+
+function montarMidia(r) {
+  const temVideo = r.stream.getVideoTracks().length > 0;
+  r.el.replaceChildren();
+  if (temVideo) {
+    r.el.className = "bloco";
+    const v = document.createElement("video"); v.autoplay = true; v.playsInline = true; v.srcObject = r.stream;
+    v.onclick = () => v.requestFullscreen?.();
+    const l = document.createElement("div"); l.className = "rotulo"; l.dataset.peer = r.peerId;
+    r.el.append(v, l);
+  } else {
+    r.el.className = "esc";
+    const a = document.createElement("audio"); a.autoplay = true; a.srcObject = r.stream; r.el.appendChild(a);
+    detectarFala(r.stream, "fala-" + r.peerId);
+  }
+  if (!r.el.isConnected) $("grade").appendChild(r.el);
+}
+
+// Blocos com avatar de quem está na call + vídeos locais
+const blocosLocais = {};
+function atualizarBlocos() {
+  const grade = $("grade"); if (!emVoz) return;
+  const naVoz = usuarios.filter((u) => u.voz);
+  // avatares
+  const ids = new Set(naVoz.map((u) => "av-" + u.id));
+  grade.querySelectorAll(".bloco.av").forEach((b) => { if (!ids.has(b.id)) b.remove(); });
+  for (const u of naVoz) {
+    let b = $("av-" + u.id);
+    if (!b) {
+      b = document.createElement("div"); b.className = "bloco av"; b.id = "av-" + u.id;
+      const a = document.createElement("div"); a.className = "avatar"; b.appendChild(a);
+      const l = document.createElement("div"); l.className = "rotulo"; b.appendChild(l);
+      grade.prepend(b);
+    }
+    b.querySelector(".avatar").textContent = inicial(u.nome); b.querySelector(".avatar").style.background = cor(u.nome);
+    b.querySelector(".rotulo").textContent = (u.id === eu.id ? "Você" : u.nome) + " " + icones(u).replace("🔊", "");
+  }
+  // vídeos locais (prévia)
+  for (const [tipo, stream] of [["cam", streamCam], ["tela", streamTela]]) {
+    if (stream && !blocosLocais[tipo]) {
+      const b = document.createElement("div"); b.className = "bloco";
+      const v = document.createElement("video"); v.autoplay = true; v.muted = true; v.playsInline = true; v.srcObject = stream;
+      if (tipo === "cam") v.style.transform = "scaleX(-1)";
+      const l = document.createElement("div"); l.className = "rotulo"; l.textContent = tipo === "cam" ? "Sua câmera" : "Sua tela";
+      b.append(v, l); grade.appendChild(b); blocosLocais[tipo] = b;
+    } else if (!stream && blocosLocais[tipo]) { blocosLocais[tipo].remove(); delete blocosLocais[tipo]; }
+  }
+  grade.querySelectorAll(".rotulo[data-peer]").forEach((l) => (l.textContent = nomeDe(l.dataset.peer)));
+}
+
+// Borda verde em quem está falando
+const analisadores = {};
+let ctxAudio;
+function detectarFala(stream, chave) {
+  try {
+    ctxAudio ||= new AudioContext();
+    const an = ctxAudio.createAnalyser(); an.fftSize = 512;
+    ctxAudio.createMediaStreamSource(stream).connect(an);
+    analisadores[chave] = an;
+  } catch {}
+}
+setInterval(() => {
+  if (!emVoz) return;
+  const buf = new Uint8Array(256);
+  for (const [chave, an] of Object.entries(analisadores)) {
+    an.getByteFrequencyData(buf);
+    const vol = buf.reduce((a, b) => a + b, 0) / buf.length;
+    const id = chave === "local-mic" ? eu.id : chave.slice(5);
+    const mutado = chave === "local-mic" && !streamMic?.getAudioTracks()[0]?.enabled;
+    $("av-" + id)?.classList.toggle("falando", vol > 12 && !mutado);
+  }
+}, 150);
+
+// =================== JOGOS ===================
+function renderJogos() {
+  const el = $("lista-jogos"); el.replaceChildren();
+  for (const j of JOGOS) {
+    const b = document.createElement("button"); b.className = "btn " + (jogoAtual?.id === j.id ? "" : "sec"); b.textContent = j.nome;
+    b.onclick = () => abrirJogo(j); el.appendChild(b);
+  }
+  if (jogoAtual) { const f = document.createElement("button"); f.className = "btn verm"; f.textContent = "Fechar jogo"; f.onclick = () => abrirJogo(null); el.appendChild(f); }
+}
+function abrirJogo(j) {
+  jogoAtual = j;
+  $("quadro-jogo").classList.toggle("esc", !j); $("sem-jogo").classList.toggle("esc", !!j);
+  $("quadro-jogo").src = j ? j.url : "about:blank";
+  renderJogos(); mostrar("jogos");
+}
+function infoParaJogo() {
+  if (jogoAtual) $("quadro-jogo").contentWindow?.postMessage({ salinha: true, tipo: "info", eu, usuarios }, "*");
+}
+addEventListener("message", (e) => {
+  const m = e.data;
+  if (!m || !m.salinha || e.source !== $("quadro-jogo").contentWindow || !jogoAtual) return;
+  if (m.tipo === "pronto") infoParaJogo();
+  if (m.tipo === "enviar") enviar({ t: "jogo", jogo: jogoAtual.id, dados: m.dados });
+});
+
+// =================== EVENTOS ===================
+$("campo-nome").value = lerLocal("salinha-nome") || "";
+$("form-login").onsubmit = (e) => {
+  e.preventDefault();
+  eu.nome = $("campo-nome").value.trim().slice(0, 24); if (!eu.nome) return;
+  salvarLocal("salinha-nome", eu.nome);
+  $("login").classList.add("esc"); $("app").classList.remove("esc");
+  if (SERVIDOR !== "principal") $("nome-servidor").textContent = "🛋️ " + SERVIDOR;
+  renderJogos(); conectar();
+};
+$("form-msg").onsubmit = (e) => {
+  e.preventDefault();
+  const texto = $("campo-msg").value.trim(); if (!texto) return;
+  enviar({ t: "msg", canal: canalAtual, texto }); $("campo-msg").value = "";
+};
+$("item-voz").onclick = () => mostrar("voz");
+$("item-jogos").onclick = () => mostrar("jogos");
+$("btn-entrar-voz").onclick = entrarVoz;
+$("btn-mic").onclick = alternarMic; $("mini-mic").onclick = alternarMic;
+$("btn-cam").onclick = alternarCam;
+$("btn-tela").onclick = alternarTela;
+$("btn-sair").onclick = () => sairVoz(); $("mini-sair").onclick = () => sairVoz();
+$("menu-btn").onclick = () => $("lateral").classList.toggle("aberto");
+</script>
+</body>
+</html>
