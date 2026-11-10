@@ -122,6 +122,7 @@
   #tocar-overlay { position:absolute; inset:0; margin:auto; width:fit-content; height:fit-content; padding:14px 22px; background:var(--azul); color:#fff; border:none; border-radius:10px; font-weight:700; font-size:16px; }
   #controles-video { display:flex; align-items:center; gap:10px; padding:8px 12px; background:#111215; }
   #controles-video button { background:none; border:none; color:#fff; font-size:18px; padding:2px 4px; }
+  #controles-video #btn-liberar-ctrl { background:var(--azul); font-size:13px; font-weight:700; padding:4px 10px; border-radius:6px; }
   #controles-video #btn-aovivo { background:var(--verm); font-size:13px; font-weight:700; padding:4px 10px; border-radius:6px; }
   #tempo-video { font-size:12px; color:var(--sub); white-space:nowrap; font-variant-numeric:tabular-nums; }
   #barra-video { flex:1; min-width:60px; accent-color:var(--azul); }
@@ -241,6 +242,7 @@
                 <span id="tempo-video">0:00 / 0:00</span>
                 <input type="range" id="barra-video" min="0" max="1" step="0.1" value="0">
                 <span class="so-pc">🔊</span><input type="range" id="vol-video" class="so-pc" min="0" max="100" value="80" title="Volume (só pra você)">
+                <button id="btn-liberar-ctrl" class="esc">▶ Liberar vídeo</button>
                 <button id="btn-aovivo" class="esc" title="Voltar todo mundo pro ao vivo">🔴 Ao vivo</button>
                 <button id="btn-prox-video" title="Próximo da fila">⏭</button>
                 <button id="btn-tela-video" title="Tela cheia">⛶</button>
@@ -251,7 +253,7 @@
             <div class="linha-botoes">
               <button class="btn sec" id="btn-parar-video">⏹ Parar pra todos</button>
               <button class="btn sec" id="btn-sair-sessao">Sair da sessão</button>
-              <button class="btn sec esc" id="btn-liberar-clique" title="Use se a Twitch pedir pra confirmar conteúdo +18 ou travar na propaganda">🔓 Clicar no player da Twitch</button>
+
             </div>
           </div>
         </div>
@@ -825,6 +827,7 @@ const Players = {
       document.head.appendChild(s);
     },
     carregar(ref, inicio, tocar, tipo) {
+      if (ref !== this.refAtual) this.recargas = 0;
       $("tw").replaceChildren();
       this.tipoAtual = tipo; this.refAtual = ref; this.ultimo = "carregando"; this.carregouEm = Date.now();
       this.tentativas = 0; this.pausaVirtual = false; $("capa-pausa").classList.add("esc");
@@ -870,14 +873,15 @@ const Players = {
       try { this.obj.play(); } catch {}
       // Se a Twitch não aceitar o play, recarrega o player (igual quando abre pela primeira vez)
       this.tentativas = (this.tentativas || 0) + 1;
-      if (this.tentativas >= 3 && Date.now() - this.carregouEm > 6000) {
+      if (this.tentativas >= 3 && Date.now() - this.carregouEm > 6000 && (this.recargas || 0) < 2) {
+        this.recargas = (this.recargas || 0) + 1;
         this.carregar(this.refAtual, posEsperada(), true, this.tipoAtual);
       }
     },
     pausar() {
       if (this.tipoAtual === "twitch-live") {
         // não pausa de verdade (a Twitch às vezes não aceita voltar): tira o som e cobre a tela
-        this.pausaVirtual = true; $("capa-pausa").classList.remove("esc");
+        this.pausaVirtual = true;
         try { this.obj.setMuted(true); } catch {}
         aoMudarEstado("pausado");
         return;
@@ -942,8 +946,8 @@ function aplicarAssistir() {
   for (const [k, outro] of Object.entries(Players)) if (k !== nome && outro.ativo) { outro.parar(); outro.ativo = false; videoCarregado = null; }
   $("yt-wrap").classList.toggle("esc", nome !== "youtube");
   $("tw").classList.toggle("esc", nome !== "twitch");
-  $("bloqueio").classList.toggle("esc", liberarCliqueAte > Date.now());
-  $("btn-liberar-clique").classList.toggle("esc", nome !== "twitch");
+  // A Twitch pausa o player se tiver QUALQUER coisa por cima dele, então nela não vai camada nenhuma
+  $("bloqueio").classList.toggle("esc", nome === "twitch");
 
   if (!assistir.videoId) { if (videoCarregado) { pl.parar(); pl.ativo = false; videoCarregado = null; } return; }
   const esperado = posEsperada();
@@ -985,7 +989,7 @@ function aplicarAssistir() {
 
 // Confere a sincronia e, se o navegador bloquear o play com som, volta a tocar no mudo
 // (sempre permitido) e mostra um botão pra ligar o som com um toque.
-let mudoAutomatico = false, liberarCliqueAte = 0;
+let mudoAutomatico = false;
 setInterval(() => {
   if (!participando || !assistir.videoId || !carregado()) return;
   aplicarAssistir();
@@ -994,8 +998,12 @@ setInterval(() => {
   if (travadoCont === 2) { pl.mutar(); pl.tocar(); mudoAutomatico = true; }
   const mudo = st === "tocando" && pl.mudo();
   if (!mudo && st === "tocando") mudoAutomatico = false;
+  const precisaToque = travadoCont >= 4 || (mudo && (mudoAutomatico || assistir.tocando));
+  const ehTwitch = nomePlayer() === "twitch";
   $("tocar-overlay").textContent = mudo ? "🔊 Toque pra ativar o som" : "▶ Toque para liberar o vídeo";
-  $("tocar-overlay").classList.toggle("esc", !(travadoCont >= 4 || (mudo && (mudoAutomatico || assistir.tocando))));
+  $("tocar-overlay").classList.toggle("esc", !precisaToque || ehTwitch);
+  $("btn-liberar-ctrl").textContent = mudo ? "🔊 Ativar som" : "▶ Liberar vídeo";
+  $("btn-liberar-ctrl").classList.toggle("esc", !precisaToque || !ehTwitch);
   atualizarTempo();
 }, 600);
 
@@ -1011,7 +1019,7 @@ function atualizarTempo() {
   $("barra-video").classList.toggle("esc", live);
   $("btn-aovivo").classList.add("esc");
   if (live) {
-    if (!pl.voltaNoLive) { $("tempo-video").textContent = "🔴 AO VIVO"; return; }
+    if (!pl.voltaNoLive) { $("tempo-video").textContent = pl.pausaVirtual ? "⏸ Pausado (sem som)" : "🔴 AO VIVO"; return; }
     const atraso = Math.max(0, pl.duracao() - pl.tempo());
     const naPonta = assistir.noAoVivo !== false && atraso < 20;
     $("tempo-video").textContent = naPonta ? "🔴 AO VIVO" : `⏪ ${fmtTempo(atraso)} atrás`;
@@ -1085,16 +1093,13 @@ $("btn-tela-video").onclick = () => {
   const p = $("player-caixa");
   if (document.fullscreenElement) document.exitFullscreen(); else (p.requestFullscreen || p.webkitRequestFullscreen)?.call(p);
 };
+$("btn-liberar-ctrl").onclick = () => $("tocar-overlay").onclick();
 $("tocar-overlay").onclick = () => {
   if (carregado()) { P().desmutar(); P().volume(volumeSalvo()); if (assistir.tocando) P().tocar(); }
   travadoCont = 0; mudoAutomatico = false; $("tocar-overlay").classList.add("esc");
 };
 $("item-assistir").onclick = () => mostrar("assistir");
-$("btn-liberar-clique").onclick = () => {
-  liberarCliqueAte = Date.now() + 15000; $("bloqueio").classList.add("esc");
-  $("btn-liberar-clique").textContent = "🔓 Clique liberado por 15s…";
-  setTimeout(() => { $("btn-liberar-clique").textContent = "🔓 Clicar no player da Twitch"; aplicarAssistir(); }, 15100);
-};
+
 
 // =================== JOGOS ===================
 function renderJogos() {
