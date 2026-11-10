@@ -8,29 +8,48 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
-// Usado pelo site: Capacitor.Plugins.Chamada.iniciar({ titulo, texto }) / .parar()
+// Usado pelo site:
+//   Capacitor.Plugins.Chamada.iniciar() / .parar()          -> call em segundo plano
+//   Capacitor.Plugins.Chamada.assistir({ ativo, titulo })    -> vídeo em segundo plano + telinha (PiP)
 @CapacitorPlugin(name = "Chamada")
 public class ChamadaPlugin extends Plugin {
 
     @PluginMethod
     public void iniciar(PluginCall call) {
-        Intent i = new Intent(getContext(), ChamadaService.class);
-        i.putExtra("titulo", call.getString("titulo", "Salinha"));
-        i.putExtra("texto", call.getString("texto", "Você está em uma call"));
-        try {
-            if (Build.VERSION.SDK_INT >= 26) getContext().startForegroundService(i);
-            else getContext().startService(i);
-            MainActivity.emChamada = true;
-            call.resolve();
-        } catch (Exception e) {
-            call.reject("Não consegui manter a call em segundo plano: " + e.getMessage());
-        }
+        MainActivity.emChamada = true;
+        atualizarServico(call);
     }
 
     @PluginMethod
     public void parar(PluginCall call) {
         MainActivity.emChamada = false;
-        getContext().stopService(new Intent(getContext(), ChamadaService.class));
-        call.resolve();
+        atualizarServico(call);
+    }
+
+    @PluginMethod
+    public void assistir(PluginCall call) {
+        MainActivity.assistindo = Boolean.TRUE.equals(call.getBoolean("ativo", false));
+        MainActivity.tituloVideo = call.getString("titulo", "");
+        if (getActivity() instanceof MainActivity) {
+            MainActivity act = (MainActivity) getActivity();
+            act.runOnUiThread(act::atualizarPip);
+        }
+        atualizarServico(call);
+    }
+
+    // Liga/atualiza o serviço se tem call ou vídeo rolando; desliga se não tem nada
+    private void atualizarServico(PluginCall call) {
+        Intent i = new Intent(getContext(), ChamadaService.class);
+        try {
+            if (MainActivity.emChamada || MainActivity.assistindo) {
+                if (Build.VERSION.SDK_INT >= 26) getContext().startForegroundService(i);
+                else getContext().startService(i);
+            } else {
+                getContext().stopService(i);
+            }
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("Não consegui manter em segundo plano: " + e.getMessage());
+        }
     }
 }

@@ -15,8 +15,8 @@ import android.os.PowerManager;
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.ServiceCompat;
 
-// Serviço que mantém a call viva com a tela desligada ou o app em segundo plano.
-// Mostra a notificação fixa "Salinha — em call" (igual o Discord).
+// Mantém a call e/ou o vídeo do "Assistir junto" vivos com a tela desligada ou o app em segundo plano.
+// Mostra uma notificação fixa (igual o Discord / YouTube).
 public class ChamadaService extends Service {
 
     private static final String CANAL = "chamada";
@@ -28,15 +28,21 @@ public class ChamadaService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        String titulo = intent != null ? intent.getStringExtra("titulo") : null;
-        String texto = intent != null ? intent.getStringExtra("texto") : null;
-        if (titulo == null) titulo = "Salinha";
-        if (texto == null) texto = "Você está em uma call";
+        boolean call = MainActivity.emChamada;
+        boolean video = MainActivity.assistindo;
+        if (!call && !video) { stopSelf(); return START_NOT_STICKY; }
+
+        String titulo;
+        String texto;
+        String video_t = MainActivity.tituloVideo == null || MainActivity.tituloVideo.isEmpty() ? "vídeo" : MainActivity.tituloVideo;
+        if (call && video) { titulo = "Salinha — em call"; texto = "📺 Assistindo: " + video_t; }
+        else if (call) { titulo = "Salinha — em call"; texto = "Toque pra voltar pra call"; }
+        else { titulo = "Salinha — assistindo junto"; texto = "📺 " + video_t; }
 
         if (Build.VERSION.SDK_INT >= 26) {
             NotificationManager nm = getSystemService(NotificationManager.class);
-            NotificationChannel canal = new NotificationChannel(CANAL, "Call em andamento", NotificationManager.IMPORTANCE_LOW);
-            canal.setDescription("Aparece enquanto você está numa call da Salinha");
+            NotificationChannel canal = new NotificationChannel(CANAL, "Call e vídeo em andamento", NotificationManager.IMPORTANCE_LOW);
+            canal.setDescription("Aparece enquanto você está numa call ou assistindo junto na Salinha");
             nm.createNotificationChannel(canal);
         }
 
@@ -48,22 +54,30 @@ public class ChamadaService extends Service {
         Notification n = new NotificationCompat.Builder(this, CANAL)
                 .setContentTitle(titulo)
                 .setContentText(texto)
-                .setSmallIcon(android.R.drawable.ic_btn_speak_now)
+                .setSmallIcon(call ? android.R.drawable.ic_btn_speak_now : android.R.drawable.ic_media_play)
                 .setOngoing(true)
+                .setOnlyAlertOnce(true)
                 .setContentIntent(pi)
-                .setCategory(NotificationCompat.CATEGORY_CALL)
+                .setCategory(call ? NotificationCompat.CATEGORY_CALL : NotificationCompat.CATEGORY_TRANSPORT)
                 .setPriority(NotificationCompat.PRIORITY_LOW)
                 .build();
 
-        int tipo = Build.VERSION.SDK_INT >= 30 ? ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE : 0;
+        int tipo = 0;
+        if (call && Build.VERSION.SDK_INT >= 30) tipo |= ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE;
+        if (video && Build.VERSION.SDK_INT >= 29) tipo |= ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK;
         try {
             ServiceCompat.startForeground(this, 1, n, tipo);
         } catch (Exception e) {
-            stopSelf();
-            return START_NOT_STICKY;
+            // Ex.: microfone sem permissão -> tenta só com o vídeo
+            try {
+                ServiceCompat.startForeground(this, 1, n, video && Build.VERSION.SDK_INT >= 29 ? ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK : 0);
+            } catch (Exception e2) {
+                stopSelf();
+                return START_NOT_STICKY;
+            }
         }
 
-        // Não deixa o processador nem o Wi-Fi "dormirem" durante a call
+        // Não deixa o processador nem o Wi-Fi "dormirem"
         if (wake == null) {
             PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
             wake = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "salinha:chamada");

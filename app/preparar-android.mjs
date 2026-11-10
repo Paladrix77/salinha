@@ -20,6 +20,7 @@ const permissoes = [
   "android.permission.MODIFY_AUDIO_SETTINGS",
   "android.permission.FOREGROUND_SERVICE",
   "android.permission.FOREGROUND_SERVICE_MICROPHONE",
+  "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
   "android.permission.POST_NOTIFICATIONS",
   "android.permission.WAKE_LOCK",
   "android.permission.ACCESS_NETWORK_STATE",
@@ -30,8 +31,13 @@ const faltando = permissoes.filter((p) => !m.includes(`"${p}"`));
 const linhas = faltando.map((p) => `    <uses-permission android:name="${p}" />`).join("\n");
 m = m.replace(/(\s*<\/manifest>)/, `\n${linhas}\n    <uses-feature android:name="android.hardware.camera" android:required="false" />\n    <uses-feature android:name="android.hardware.microphone" android:required="false" />$1`);
 
-const servico = `        <service android:name=".ChamadaService" android:exported="false" android:foregroundServiceType="microphone" />\n`;
+const servico = `        <service android:name=".ChamadaService" android:exported="false" android:foregroundServiceType="microphone|mediaPlayback" />\n`;
 if (!m.includes("ChamadaService")) m = m.replace(/(\s*<\/application>)/, `\n${servico}$1`);
+
+// Telinha flutuante (PiP) na tela principal
+if (!m.includes("supportsPictureInPicture")) {
+  m = m.replace(/<activity(\s)/, '<activity android:supportsPictureInPicture="true" android:resizeableActivity="true"$1');
+}
 
 fs.writeFileSync(manifestPath, m);
 console.log("AndroidManifest ajustado (+" + faltando.length + " permissões, serviço da call)");

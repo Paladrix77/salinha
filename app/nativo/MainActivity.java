@@ -1,9 +1,12 @@
 package com.salinha.app;
 
 import android.Manifest;
+import android.app.PictureInPictureParams;
+import android.content.res.Configuration;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
+import android.util.Rational;
 import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.WebView;
@@ -26,6 +29,9 @@ public class MainActivity extends BridgeActivity {
 
     // Ligado enquanto a pessoa está numa call (o plugin Chamada controla)
     public static volatile boolean emChamada = false;
+    // Ligado enquanto tem vídeo tocando no "Assistir junto"
+    public static volatile boolean assistindo = false;
+    public static volatile String tituloVideo = "";
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -89,11 +95,44 @@ public class MainActivity extends BridgeActivity {
 
     // Em call, não deixa o Android "congelar" o app quando sai da tela
     private void manterVivo() {
-        if (!emChamada) return;
+        if (!emChamada && !assistindo) return;
         try {
             WebView w = getBridge().getWebView();
             w.onResume();
             w.resumeTimers();
+        } catch (Exception ignored) { }
+    }
+
+    // ---- Telinha flutuante (Picture-in-Picture) ----
+    private PictureInPictureParams parametrosPip(boolean auto) {
+        PictureInPictureParams.Builder b = new PictureInPictureParams.Builder().setAspectRatio(new Rational(16, 9));
+        if (Build.VERSION.SDK_INT >= 31) b.setAutoEnterEnabled(auto).setSeamlessResizeEnabled(true);
+        return b.build();
+    }
+
+    // Android 12+: entra na telinha sozinho ao sair do app (inclusive pelo gesto de início)
+    public void atualizarPip() {
+        if (Build.VERSION.SDK_INT >= 31) {
+            try { setPictureInPictureParams(parametrosPip(assistindo)); } catch (Exception ignored) { }
+        }
+    }
+
+    // Android 8 a 11: entra na telinha quando aperta o botão de início
+    @Override
+    public void onUserLeaveHint() {
+        super.onUserLeaveHint();
+        if (assistindo && Build.VERSION.SDK_INT >= 26 && Build.VERSION.SDK_INT < 31) {
+            try { enterPictureInPictureMode(parametrosPip(false)); } catch (Exception ignored) { }
+        }
+    }
+
+    // Avisa o site pra mostrar só o vídeo na telinha
+    @Override
+    public void onPictureInPictureModeChanged(boolean naTelinha, Configuration novaConfig) {
+        super.onPictureInPictureModeChanged(naTelinha, novaConfig);
+        try {
+            getBridge().getWebView().evaluateJavascript(
+                    "window.dispatchEvent(new CustomEvent('salinha-pip',{detail:" + naTelinha + "}))", null);
         } catch (Exception ignored) { }
     }
 
