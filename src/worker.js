@@ -156,7 +156,7 @@ export class Sala extends DurableObject {
     const agora = Date.now();
     const posAgora = () => a.posicao + (a.tocando ? (agora - a.atualizadoEm) / 1000 : 0);
     const num = (v, padrao) => (typeof v === "number" && isFinite(v) && v >= 0 ? v : padrao);
-    const iniciar = (item) => { a.videoId = item.videoId; a.titulo = item.titulo; a.tocando = true; a.posicao = 0; };
+    const iniciar = (item) => { a.videoId = item.videoId; a.titulo = item.titulo; a.tocando = true; a.posicao = 0; a.noAoVivo = true; };
     let acao = "";
 
     switch (m.acao) {
@@ -171,15 +171,19 @@ export class Sala extends DurableObject {
       }
       case "play":
         if (!a.videoId) return;
-        a.posicao = num(m.posicao, posAgora()); a.tocando = true; acao = `${eu.nome} deu play`;
+        a.posicao = num(m.posicao, posAgora()); a.tocando = true; a.noAoVivo = false; acao = `${eu.nome} deu play`;
         break;
       case "pause":
         if (!a.videoId) return;
-        a.posicao = num(m.posicao, posAgora()); a.tocando = false; acao = `${eu.nome} pausou`;
+        a.posicao = num(m.posicao, posAgora()); a.tocando = false; a.noAoVivo = false; acao = `${eu.nome} pausou`;
         break;
       case "seek":
         if (!a.videoId) return;
-        a.posicao = num(m.posicao, posAgora()); acao = `${eu.nome} pulou o vídeo`;
+        a.posicao = num(m.posicao, posAgora()); a.noAoVivo = false; acao = `${eu.nome} pulou o vídeo`;
+        break;
+      case "aovivo": // live: todo mundo volta pro ao vivo
+        if (!a.videoId) return;
+        a.noAoVivo = true; a.tocando = true; acao = `${eu.nome} voltou todo mundo pro 🔴 ao vivo`;
         break;
       case "fim": // vários clientes avisam; só avança uma vez
         if (m.videoId !== a.videoId) return;

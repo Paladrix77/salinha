@@ -121,6 +121,7 @@
   #tocar-overlay { position:absolute; inset:0; margin:auto; width:fit-content; height:fit-content; padding:14px 22px; background:var(--azul); color:#fff; border:none; border-radius:10px; font-weight:700; font-size:16px; }
   #controles-video { display:flex; align-items:center; gap:10px; padding:8px 12px; background:#111215; }
   #controles-video button { background:none; border:none; color:#fff; font-size:18px; padding:2px 4px; }
+  #controles-video #btn-aovivo { background:var(--verm); font-size:13px; font-weight:700; padding:4px 10px; border-radius:6px; }
   #tempo-video { font-size:12px; color:var(--sub); white-space:nowrap; font-variant-numeric:tabular-nums; }
   #barra-video { flex:1; min-width:60px; accent-color:var(--azul); }
   #vol-video { width:80px; accent-color:var(--azul); }
@@ -237,6 +238,7 @@
                 <span id="tempo-video">0:00 / 0:00</span>
                 <input type="range" id="barra-video" min="0" max="1" step="0.1" value="0">
                 <span class="so-pc">🔊</span><input type="range" id="vol-video" class="so-pc" min="0" max="100" value="80" title="Volume (só pra você)">
+                <button id="btn-aovivo" class="esc" title="Voltar todo mundo pro ao vivo">🔴 Ao vivo</button>
                 <button id="btn-prox-video" title="Próximo da fila">⏭</button>
                 <button id="btn-tela-video" title="Tela cheia">⛶</button>
               </div>
@@ -839,11 +841,23 @@ function aplicarAssistir() {
     return;
   }
   const st = yt.getPlayerState(), atual = yt.getCurrentTime() || 0, dur = yt.getDuration() || 0;
-  // LIVE: não dá pra sincronizar por tempo; todo mundo fica no "ao vivo" e só play/pausa valem
+  // LIVE: se a sala está "no ao vivo", cada um fica na ponta da transmissão;
+  // se alguém pausou, todos seguem atrasados no mesmo ponto até alguém apertar "🔴 Ao vivo"
   if (ehAoVivo()) {
-    if (aoVivoAjustado !== videoCarregado && dur) { aoVivoAjustado = videoCarregado; yt.seekTo(dur, true); }
-    if (assistir.tocando && st !== 1 && st !== 3) { yt.playVideo(); if (st === 2 && dur) yt.seekTo(dur, true); }
-    if (!assistir.tocando && (st === 1 || st === 3)) yt.pauseVideo();
+    if (assistir.noAoVivo !== false) {
+      if (dur && dur - atual > 15) yt.seekTo(dur, true);
+      if (assistir.tocando && st !== 1 && st !== 3) yt.playVideo();
+      if (!assistir.tocando && (st === 1 || st === 3)) yt.pauseVideo();
+      return;
+    }
+    const alvo = Math.min(esperado, dur || esperado);
+    if (assistir.tocando) {
+      if (st !== 1 && st !== 3) yt.playVideo();
+      if (Math.abs(atual - alvo) > 3) yt.seekTo(alvo, true);
+    } else {
+      if (st === 1 || st === 3) yt.pauseVideo();
+      if (st !== 5 && Math.abs(atual - alvo) > 2) yt.seekTo(alvo, true);
+    }
     return;
   }
   if (st === 0 || (dur && esperado > dur - 0.5)) return; // terminou: espera a sala avançar
@@ -875,10 +889,14 @@ function atualizarTempo() {
   const live = ehAoVivo();
   $("barra-video").classList.toggle("esc", live);
   if (live) {
-    $("tempo-video").textContent = "🔴 AO VIVO";
+    const atraso = Math.max(0, (yt.getDuration() || 0) - (yt.getCurrentTime() || 0));
+    const naPonta = assistir.noAoVivo !== false && atraso < 20;
+    $("tempo-video").textContent = naPonta ? "🔴 AO VIVO" : `⏪ ${fmtTempo(atraso)} atrás`;
+    $("btn-aovivo").classList.toggle("esc", naPonta);
     $("btn-play-video").textContent = assistir.tocando ? "⏸" : "▶";
     return;
   }
+  $("btn-aovivo").classList.add("esc");
   const dur = ytPronto && videoCarregado ? yt.getDuration() || 0 : 0;
   const atual = ytPronto && videoCarregado ? yt.getCurrentTime() || 0 : posEsperada();
   if (!arrastandoBarra) { $("barra-video").max = Math.max(1, dur); $("barra-video").value = atual; }
@@ -929,6 +947,7 @@ $("btn-play-video").onclick = () => {
   const pos = ytPronto && videoCarregado ? yt.getCurrentTime() : undefined;
   enviar({ t: "assistir", acao: assistir.tocando ? "pause" : "play", posicao: pos });
 };
+$("btn-aovivo").onclick = () => enviar({ t: "assistir", acao: "aovivo" });
 $("btn-prox-video").onclick = () => enviar({ t: "assistir", acao: "proximo" });
 $("btn-parar-video").onclick = () => { if (assistir.videoId && confirm("Parar o vídeo pra todo mundo?")) enviar({ t: "assistir", acao: "parar" }); };
 $("barra-video").oninput = () => { arrastandoBarra = true; atualizarTempo(); };
