@@ -118,6 +118,7 @@
   #video-area { position:relative; width:100%; aspect-ratio:16/9; max-height:calc(100vh - 290px); }
   #yt-wrap, #yt, #tw, #tw iframe { position:absolute; inset:0; width:100%; height:100%; border:0; }
   #bloqueio { position:absolute; inset:0; }
+  #capa-pausa { position:absolute; inset:0; background:#000d; display:flex; align-items:center; justify-content:center; font-size:28px; font-weight:800; color:#fff; letter-spacing:.02em; }
   #tocar-overlay { position:absolute; inset:0; margin:auto; width:fit-content; height:fit-content; padding:14px 22px; background:var(--azul); color:#fff; border:none; border-radius:10px; font-weight:700; font-size:16px; }
   #controles-video { display:flex; align-items:center; gap:10px; padding:8px 12px; background:#111215; }
   #controles-video button { background:none; border:none; color:#fff; font-size:18px; padding:2px 4px; }
@@ -231,6 +232,7 @@
               <div id="video-area">
                 <div id="yt-wrap"><div id="yt"></div></div>
                 <div id="tw" class="esc"></div>
+                <div id="capa-pausa" class="esc">⏸ Pausado</div>
                 <div id="bloqueio"></div>
                 <button id="tocar-overlay" class="esc">▶ Toque para liberar o vídeo</button>
               </div>
@@ -824,7 +826,8 @@ const Players = {
     },
     carregar(ref, inicio, tocar, tipo) {
       $("tw").replaceChildren();
-      this.tipoAtual = tipo; this.ultimo = "carregando"; this.carregouEm = Date.now();
+      this.tipoAtual = tipo; this.refAtual = ref; this.ultimo = "carregando"; this.carregouEm = Date.now();
+      this.tentativas = 0; this.pausaVirtual = false; $("capa-pausa").classList.add("esc");
       const opts = { width: "100%", height: "100%", parent: [location.hostname], autoplay: true, muted: false };
       if (tipo === "twitch-live") opts.channel = ref; else opts.video = ref;
       const p = (this.obj = new Twitch.Player("tw", opts));
@@ -838,7 +841,7 @@ const Players = {
       p.addEventListener(E.READY, () => {
         try { p.setVolume(volumeSalvo() / 100); } catch {}
         if (tipo === "twitch-vod" && inicio > 1) p.seek(inicio);
-        if (!tocar) p.pause();
+        if (!tocar) this.pausar();
       });
       const marca = (st) => () => { if (this.obj === p) { this.ultimo = st; aoMudarEstado(st); } };
       p.addEventListener(E.PLAY, marca("tocando"));
@@ -849,33 +852,47 @@ const Players = {
     },
     estado() {
       if (!this.obj) return "parado";
+      if (this.pausaVirtual) return "pausado";
       try {
         if (this.obj.getEnded()) return "fim";
         // não depende dos eventos da Twitch (às vezes não chegam): pausado é pausado, salvo nos primeiros segundos
         if (this.obj.getPaused()) return Date.now() - this.carregouEm < 4000 ? "carregando" : "pausado";
+        this.tentativas = 0;
         return "tocando";
       } catch { return this.ultimo; }
     },
     tocar() {
-      try {
-        this.obj.play();
-        // live parada há muito tempo às vezes não volta com play(): recarrega o canal
-        if (this.tipoAtual === "twitch-live" && this.obj.getPaused() && Date.now() - (this.ultimoPlay || 0) > 5000) {
-          this.ultimoPlay = Date.now();
-          setTimeout(() => { try { if (this.obj?.getPaused() && assistir.tocando) this.obj.setChannel(this.obj.getChannel()); } catch {} }, 2500);
-        }
-      } catch {}
+      // Live: a "pausa" só tirou o som e cobriu a tela, então voltar é instantâneo
+      if (this.pausaVirtual) {
+        this.pausaVirtual = false; $("capa-pausa").classList.add("esc");
+        try { this.obj.setMuted(false); this.obj.setVolume(volumeSalvo() / 100); } catch {}
+      }
+      try { this.obj.play(); } catch {}
+      // Se a Twitch não aceitar o play, recarrega o player (igual quando abre pela primeira vez)
+      this.tentativas = (this.tentativas || 0) + 1;
+      if (this.tentativas >= 3 && Date.now() - this.carregouEm > 6000) {
+        this.carregar(this.refAtual, posEsperada(), true, this.tipoAtual);
+      }
     },
-    pausar() { try { this.obj.pause(); } catch {} },
+    pausar() {
+      if (this.tipoAtual === "twitch-live") {
+        // não pausa de verdade (a Twitch às vezes não aceita voltar): tira o som e cobre a tela
+        this.pausaVirtual = true; $("capa-pausa").classList.remove("esc");
+        try { this.obj.setMuted(true); } catch {}
+        aoMudarEstado("pausado");
+        return;
+      }
+      try { this.obj.pause(); } catch {}
+    },
     ir(t) { if (this.tipoAtual === "twitch-vod") try { this.obj.seek(t); } catch {} },
     tempo() { try { return this.obj.getCurrentTime() || 0; } catch { return 0; } },
     duracao() { try { return this.obj.getDuration() || 0; } catch { return 0; } },
-    parar() { try { this.obj?.pause(); } catch {} $("tw").replaceChildren(); this.obj = null; },
+    parar() { try { this.obj?.pause(); } catch {} $("tw").replaceChildren(); this.obj = null; this.pausaVirtual = false; $("capa-pausa").classList.add("esc"); },
     volume(v) { try { this.obj.setMuted(false); this.obj.setVolume(v / 100); } catch {} },
     live() { return this.tipoAtual === "twitch-live"; },
     voltaNoLive: false, // live da Twitch no player embutido não volta no tempo
-    mudo() { try { return this.obj.getMuted(); } catch { return false; } },
-    desmutar() { try { this.obj.setMuted(false); } catch {} },
+    mudo() { if (this.pausaVirtual) return false; try { return this.obj.getMuted(); } catch { return false; } },
+    desmutar() { if (this.pausaVirtual) return; try { this.obj.setMuted(false); } catch {} },
     mutar() { try { this.obj.setMuted(true); } catch {} },
   },
 };
