@@ -144,6 +144,11 @@ export class Sala extends DurableObject {
       case "assistir":
         await this.acaoAssistir(m, eu);
         break;
+      case "assistindo": // quem está com a sessão do "Assistir junto" aberta
+        eu.assistindo = !!m.ativo;
+        ws.serializeAttachment(eu);
+        this.avisarUsuarios();
+        break;
       case "jogo": // repassa dados do jogo pra todo mundo (menos quem mandou)
         this.transmitir({ t: "jogo", jogo: String(m.jogo || ""), de: eu.id, nome: eu.nome, dados: m.dados }, ws);
         break;

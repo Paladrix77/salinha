@@ -131,6 +131,10 @@
   #player-caixa:fullscreen #video-area { max-height:none; flex:1; aspect-ratio:auto; }
   #assistir-titulo { font-weight:700; margin-top:12px; }
   #assistir-acao { color:var(--sub); font-size:13px; margin-top:2px; }
+  #assistindo { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-top:10px; }
+  .assistindo-txt { font-size:13px; color:var(--sub); font-weight:600; margin-right:2px; }
+  .chip-assistindo { display:inline-flex; align-items:center; gap:6px; background:var(--bg2); padding:3px 10px 3px 3px; border-radius:20px; font-size:13px; }
+  .chip-assistindo .mini { width:22px; height:22px; font-size:11px; }
   .linha-botoes { display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; }
   #fila-lado { width:290px; border-left:1px solid #0006; padding:8px; overflow-y:auto; flex-shrink:0; }
   .fila-item { display:flex; gap:8px; align-items:center; padding:6px; border-radius:8px; }
@@ -226,6 +230,7 @@
         <div id="assistir-principal">
           <div id="assistir-entrar">
             <p id="assistir-entrar-info"></p>
+            <p id="assistir-entrar-quem"></p>
             <button class="btn" id="btn-entrar-sessao">📺 Entrar na sessão</button>
           </div>
           <div id="palco" class="esc">
@@ -250,6 +255,7 @@
             </div>
             <div id="assistir-titulo"></div>
             <div id="assistir-acao"></div>
+            <div id="assistindo"></div>
             <div class="linha-botoes">
               <button class="btn sec" id="btn-parar-video">⏹ Parar pra todos</button>
               <button class="btn sec" id="btn-sair-sessao">Sair da sessão</button>
@@ -327,12 +333,13 @@ function tratar(m) {
       eu.id = m.id; canais = m.canais; historico = m.historico;
       $("eu-nome").textContent = "👤 " + eu.nome; $("eu-nome").dataset.fala = eu.id;
       renderCanais(); renderMensagens(); receberAssistir(m.assistir, m.agora);
+      if (participando) enviar({ t: "assistindo", ativo: true });
       if (conectadoAntes) adicionarSistema("Reconectado!");
       conectadoAntes = true;
       break;
     case "usuarios":
       usuarios = m.lista;
-      renderMembros(); renderVozSidebar(); sincronizarPeers(); atualizarBlocos(); infoParaJogo();
+      renderMembros(); renderVozSidebar(); sincronizarPeers(); atualizarBlocos(); infoParaJogo(); renderAssistindo();
       break;
     case "msg":
       (historico[m.canal] ||= []).push(m);
@@ -400,6 +407,7 @@ function adicionarSistema(texto) {
 
 // =================== MEMBROS ===================
 function icones(u) { if (!u.voz) return ""; return "🔊" + (u.midia?.mic === false ? "🔇" : "") + (u.midia?.cam ? "📷" : "") + (u.midia?.tela ? "🖥️" : ""); }
+function iconesMembro(u) { return icones(u) + (u.assistindo ? "📺" : ""); }
 function renderMembros() {
   const el = $("membros"); el.replaceChildren();
   const t = document.createElement("div"); t.className = "secao"; t.textContent = `Online — ${usuarios.length}`; el.appendChild(t);
@@ -407,7 +415,7 @@ function renderMembros() {
     const d = document.createElement("div"); d.className = "membro";
     const av = document.createElement("div"); av.className = "mini"; av.style.background = cor(u.nome); av.textContent = inicial(u.nome);
     const n = document.createElement("span"); n.textContent = u.nome + (u.id === eu.id ? " (você)" : "");
-    const i = document.createElement("span"); i.className = "icones"; i.textContent = icones(u);
+    const i = document.createElement("span"); i.className = "icones"; i.textContent = iconesMembro(u);
     d.append(av, n, i); el.appendChild(d);
   }
 }
@@ -931,9 +939,10 @@ function aoErro(tipo) {
   renderAssistir();
 }
 
-function entrarSessao() { participando = true; aplicarAssistir(); renderAssistir(); }
+function entrarSessao() { participando = true; enviar({ t: "assistindo", ativo: true }); aplicarAssistir(); renderAssistir(); }
 function sairSessao() {
   participando = false; videoCarregado = null;
+  enviar({ t: "assistindo", ativo: false });
   for (const pl of Object.values(Players)) if (pl.ativo) { pl.parar(); pl.ativo = false; }
   renderAssistir();
 }
@@ -1032,6 +1041,27 @@ function atualizarTempo() {
   $("tempo-video").textContent = `${fmtTempo(arrastandoBarra ? $("barra-video").value : atual)} / ${fmtTempo(dur)}`;
 }
 
+// Quem está assistindo
+function renderAssistindo() {
+  const lista = usuarios.filter((u) => u.assistindo);
+  const n = lista.length;
+  const ao = !!assistir.videoId && assistir.tocando;
+  $("item-assistir").textContent = (ao ? "📺 Assistir (ao vivo)" : "📺 Assistir junto") + (n ? ` · 👀 ${n}` : "");
+  const caixa = $("assistindo"); caixa.replaceChildren();
+  const t = document.createElement("span"); t.className = "assistindo-txt";
+  t.textContent = n ? `👀 ${n} ${n === 1 ? "pessoa assistindo" : "pessoas assistindo"}:` : "👀 Ninguém assistindo ainda";
+  caixa.appendChild(t);
+  for (const u of lista) {
+    const chip = document.createElement("span"); chip.className = "chip-assistindo";
+    const av = document.createElement("span"); av.className = "mini"; av.style.background = cor(u.nome); av.textContent = inicial(u.nome);
+    const nome = document.createElement("span"); nome.textContent = u.id === eu.id ? "Você" : u.nome;
+    chip.append(av, nome);
+    if (u.voz) { const v = document.createElement("span"); v.textContent = "🔊"; v.title = "Na call"; chip.appendChild(v); }
+    caixa.appendChild(chip);
+  }
+  $("assistir-entrar-quem").textContent = n ? `👀 ${lista.map((u) => u.nome).join(", ")} ${n === 1 ? "está" : "estão"} assistindo` : "";
+}
+
 function miniatura(item) {
   if ((item.tipo || "youtube") === "youtube") return `https://i.ytimg.com/vi/${item.ref || item.videoId}/mqdefault.jpg`;
   if (item.tipo === "twitch-live") return `https://static-cdn.jtvnw.net/previews-ttv/live_user_${item.ref}-320x180.jpg`;
@@ -1040,7 +1070,7 @@ function miniatura(item) {
 
 function renderAssistir() {
   const temVideo = !!assistir.videoId;
-  $("item-assistir").textContent = temVideo && assistir.tocando ? "📺 Assistir (ao vivo)" : "📺 Assistir junto";
+  renderAssistindo();
   $("assistir-entrar").classList.toggle("esc", participando);
   $("palco").classList.toggle("esc", !participando);
   $("assistir-titulo").textContent = temVideo ? (assistir.tocando ? "▶ " : "⏸ ") + assistir.titulo : "Nada tocando. Cole um link do YouTube ou da Twitch acima.";
