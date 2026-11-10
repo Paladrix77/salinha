@@ -449,6 +449,17 @@ function renderVozSidebar() {
   }
 }
 
+// =================== APP ANDROID (Capacitor) ===================
+// Dentro do app, avisa o Android pra manter a call viva em segundo plano (notificação fixa).
+const ehApp = () => !!window.Capacitor?.isNativePlatform?.();
+function appChamada(acao) {
+  if (!ehApp()) return;
+  const plugin = window.Capacitor?.Plugins?.Chamada;
+  if (!plugin) return;
+  if (acao === "iniciar") plugin.iniciar({ titulo: "Salinha — em call", texto: "Toque pra voltar pra call" }).catch((e) => console.warn(e));
+  else plugin.parar().catch(() => {});
+}
+
 // =================== VOZ / VÍDEO (WebRTC direto entre navegadores) ===================
 const pref = { mic: lerLocal("salinha-mic") || "", cam: lerLocal("salinha-cam") || "", saida: lerLocal("salinha-saida") || "" };
 let ctxAudio, focoEl = null, streamTeste = null;
@@ -480,6 +491,7 @@ async function entrarVoz() {
   try { streamMic = await pegarMic(pref.mic); detectarFala(streamMic, "local"); }
   catch (e) { alert("Não consegui acessar o microfone (" + e.message + "). Você vai entrar só ouvindo."); streamMic = null; }
   emVoz = true;
+  appChamada("iniciar");
   enviar({ t: "voz", ativo: true });
   enviarMidia();
   for (const u of usuarios) if (u.voz && u.id !== eu.id) criarPeer(u.id);
@@ -492,6 +504,7 @@ function sairVoz(silencioso) {
   streamMic = streamCam = streamTela = null;
   for (const k of Object.keys(analisadores)) if (k !== "teste") pararAnalise(k);
   emVoz = false; focoEl = null;
+  appChamada("parar");
   for (const k of Object.keys(blocosLocais)) delete blocosLocais[k];
   if (!silencioso) enviar({ t: "voz", ativo: false });
   $("grade").replaceChildren();

@@ -1,0 +1,14 @@
+{
+  "name": "salinha-app",
+  "private": true,
+  "version": "1.0.0",
+  "description": "App Android da Salinha (Capacitor). O APK é gerado pelo GitHub Actions.",
+  "dependencies": {
+    "@capacitor/android": "^7.0.0",
+    "@capacitor/core": "^7.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^7.0.0"
+  }
+}

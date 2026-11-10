@@ -1,0 +1,13 @@
+{
+  "appId": "com.salinha.app",
+  "appName": "Salinha",
+  "webDir": "www",
+  "server": {
+    "url": "https://salinha-teste.p4ladino777.workers.dev",
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": false,
+    "backgroundColor": "#16171b"
+  }
+}
