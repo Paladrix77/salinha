@@ -4,6 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Salinha</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#16171b">
+<link rel="icon" type="image/png" href="/icones/favicon.png">
+<link rel="apple-touch-icon" href="/icones/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Salinha">
 <style>
   :root { --bg0:#16171b; --bg1:#1e1f24; --bg2:#26282e; --bg3:#30333b; --txt:#e6e6eb; --sub:#9a9ca8; --azul:#5865f2; --verde:#3ba55d; --verm:#ed4245; }
   * { box-sizing: border-box; }
@@ -118,6 +125,7 @@
     <p>Chat, call, câmera, tela e jogos com a galera.</p>
     <input class="campo" id="campo-nome" placeholder="Seu apelido" maxlength="24" required autofocus>
     <button class="btn" type="submit">Entrar</button>
+    <button class="btn sec instalar esc" type="button">📲 Instalar app</button>
   </form>
 </div>
 
@@ -139,6 +147,7 @@
           <button class="btn verm" id="mini-sair" title="Sair da call">📞</button>
         </div>
       </div>
+      <button class="btn sec instalar esc" type="button">📲 Instalar app</button>
       <div id="eu-linha"><div id="eu-nome"></div><button id="btn-config-mini" title="Configurações de voz e vídeo">⚙️</button></div>
     </div>
   </nav>
@@ -730,6 +739,25 @@ $("config").onclick = (e) => { if (e.target === $("config")) fecharConfig(); };
 $("sel-mic").onchange = async (e) => { await trocarMic(e.target.value); if (!emVoz && !$("config").classList.contains("esc")) iniciarTeste(); };
 $("sel-cam").onchange = (e) => trocarCam(e.target.value);
 $("sel-saida").onchange = (e) => trocarSaida(e.target.value);
+// =================== APP INSTALÁVEL ===================
+if ("serviceWorker" in navigator) addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {}));
+let pedidoInstalacao = null;
+addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault(); pedidoInstalacao = e;
+  document.querySelectorAll(".instalar").forEach((b) => b.classList.remove("esc"));
+});
+addEventListener("appinstalled", () => {
+  pedidoInstalacao = null;
+  document.querySelectorAll(".instalar").forEach((b) => b.classList.add("esc"));
+});
+document.querySelectorAll(".instalar").forEach((b) => (b.onclick = async () => {
+  if (!pedidoInstalacao) return;
+  pedidoInstalacao.prompt();
+  await pedidoInstalacao.userChoice.catch(() => {});
+  pedidoInstalacao = null;
+  document.querySelectorAll(".instalar").forEach((x) => x.classList.add("esc"));
+}));
+
 $("menu-btn").onclick = () => $("lateral").classList.toggle("aberto");
 </script>
 </body>
