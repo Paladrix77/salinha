@@ -4,11 +4,18 @@ import android.Manifest;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
+import android.view.View;
+import android.view.ViewGroup;
 import android.webkit.WebView;
 
 import androidx.activity.OnBackPressedCallback;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 
 import com.getcapacitor.BridgeActivity;
 
@@ -24,6 +31,8 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(ChamadaPlugin.class);
         super.onCreate(savedInstanceState);
+
+        ajustarBarrasDoSistema();
 
         // Pede microfone, câmera e notificações logo na primeira abertura
         List<String> pedir = new ArrayList<>();
@@ -50,6 +59,32 @@ public class MainActivity extends BridgeActivity {
                 else moveTaskToBack(true);
             }
         });
+    }
+
+    // O conteúdo fica entre a barra de notificações (em cima) e a de navegação (embaixo),
+    // e sobe junto quando o teclado abre.
+    private void ajustarBarrasDoSistema() {
+        try {
+            View decor = getWindow().getDecorView();
+            decor.setBackgroundColor(0xFF16171B); // fundo escuro atrás das barras
+            WindowInsetsControllerCompat ctrl = WindowCompat.getInsetsController(getWindow(), decor);
+            ctrl.setAppearanceLightStatusBars(false);     // ícones brancos (fundo escuro)
+            ctrl.setAppearanceLightNavigationBars(false);
+
+            View web = getBridge().getWebView();
+            ViewCompat.setOnApplyWindowInsetsListener(web, (v, insets) -> {
+                Insets barras = insets.getInsets(WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.displayCutout());
+                Insets teclado = insets.getInsets(WindowInsetsCompat.Type.ime());
+                ViewGroup.MarginLayoutParams lp = (ViewGroup.MarginLayoutParams) v.getLayoutParams();
+                lp.topMargin = barras.top;
+                lp.bottomMargin = Math.max(barras.bottom, teclado.bottom);
+                lp.leftMargin = barras.left;
+                lp.rightMargin = barras.right;
+                v.setLayoutParams(lp);
+                return WindowInsetsCompat.CONSUMED;
+            });
+            ViewCompat.requestApplyInsets(web);
+        } catch (Exception ignored) { }
     }
 
     // Em call, não deixa o Android "congelar" o app quando sai da tela
