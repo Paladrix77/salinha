@@ -28,6 +28,11 @@ export class Sala extends DurableObject {
     this.sql.exec(`CREATE TABLE IF NOT EXISTS mensagens (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       canal TEXT, autor TEXT, texto TEXT, bot INTEGER, ts INTEGER)`);
+    // Estado do "Assistir junto" (vídeo atual + fila)
+    ctx.blockConcurrencyWhile(async () => {
+      this.assistir = (await ctx.storage.get("assistir")) ||
+        { videoId: null, titulo: "", tocando: false, posicao: 0, atualizadoEm: Date.now(), fila: [], ultimaAcao: "" };
+    });
   }
 
   async fetch() {
@@ -100,7 +105,7 @@ export class Sala extends DurableObject {
     if (m.t === "entrar") {
       eu.nome = String(m.nome || "").trim().slice(0, 24) || "Anônimo";
       ws.serializeAttachment(eu);
-      this.enviar(ws, { t: "bemvindo", id: eu.id, canais: CANAIS, historico: this.historico() });
+      this.enviar(ws, { t: "bemvindo", id: eu.id, canais: CANAIS, historico: this.historico(), assistir: this.assistir, agora: Date.now() });
       this.avisarUsuarios();
       this.transmitir({ t: "sistema", texto: `${eu.nome} entrou` }, ws);
       return;
@@ -136,10 +141,67 @@ export class Sala extends DurableObject {
           }
         }
         break;
+      case "assistir":
+        await this.acaoAssistir(m, eu);
+        break;
       case "jogo": // repassa dados do jogo pra todo mundo (menos quem mandou)
         this.transmitir({ t: "jogo", jogo: String(m.jogo || ""), de: eu.id, nome: eu.nome, dados: m.dados }, ws);
         break;
     }
+  }
+
+  // ---------- Assistir junto ----------
+  async acaoAssistir(m, eu) {
+    const a = this.assistir;
+    const agora = Date.now();
+    const posAgora = () => a.posicao + (a.tocando ? (agora - a.atualizadoEm) / 1000 : 0);
+    const num = (v, padrao) => (typeof v === "number" && isFinite(v) && v >= 0 ? v : padrao);
+    const iniciar = (item) => { a.videoId = item.videoId; a.titulo = item.titulo; a.tocando = true; a.posicao = 0; };
+    let acao = "";
+
+    switch (m.acao) {
+      case "tocar":
+      case "fila": {
+        const videoId = idDoYoutube(m.url);
+        if (!videoId) return;
+        const item = { videoId, titulo: await tituloDoYoutube(videoId), por: eu.nome };
+        if (m.acao === "tocar" || !a.videoId) { iniciar(item); acao = `${eu.nome} colocou: ${item.titulo}`; }
+        else { a.fila.push(item); a.fila = a.fila.slice(0, 50); acao = `${eu.nome} adicionou na fila: ${item.titulo}`; }
+        break;
+      }
+      case "play":
+        if (!a.videoId) return;
+        a.posicao = num(m.posicao, posAgora()); a.tocando = true; acao = `${eu.nome} deu play`;
+        break;
+      case "pause":
+        if (!a.videoId) return;
+        a.posicao = num(m.posicao, posAgora()); a.tocando = false; acao = `${eu.nome} pausou`;
+        break;
+      case "seek":
+        if (!a.videoId) return;
+        a.posicao = num(m.posicao, posAgora()); acao = `${eu.nome} pulou o vídeo`;
+        break;
+      case "fim": // vários clientes avisam; só avança uma vez
+        if (m.videoId !== a.videoId) return;
+        // fallthrough
+      case "proximo":
+        if (a.fila.length) { const prox = a.fila.shift(); iniciar(prox); acao = `Tocando: ${prox.titulo}`; }
+        else { a.tocando = false; a.posicao = m.acao === "fim" ? posAgora() : a.posicao; acao = m.acao === "fim" ? "Fila acabou" : "Fila vazia"; }
+        break;
+      case "remover":
+        if (!(m.indice >= 0 && m.indice < a.fila.length)) return;
+        acao = `${eu.nome} tirou da fila: ${a.fila.splice(m.indice, 1)[0].titulo}`;
+        break;
+      case "parar":
+        a.videoId = null; a.titulo = ""; a.tocando = false; a.posicao = 0; acao = `${eu.nome} parou o vídeo`;
+        break;
+      default:
+        return;
+    }
+    a.atualizadoEm = Date.now();
+    a.ultimaAcao = acao;
+    await this.ctx.storage.put("assistir", a);
+    this.transmitir({ t: "assistir", estado: a, agora: Date.now() });
   }
 
   async webSocketClose(ws, code) {
@@ -157,4 +219,20 @@ export class Sala extends DurableObject {
     this.avisarUsuarios(ws);
     this.transmitir({ t: "sistema", texto: `${eu.nome} saiu` }, ws);
   }
+}
+
+// ---------- helpers do YouTube ----------
+function idDoYoutube(url) {
+  const txt = String(url || "").trim();
+  if (/^[\w-]{11}$/.test(txt)) return txt;
+  const m = txt.match(/(?:youtu\.be\/|v=|\/shorts\/|\/embed\/|\/live\/)([\w-]{11})/);
+  return m ? m[1] : null;
+}
+
+async function tituloDoYoutube(videoId) {
+  try {
+    const r = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`, { signal: AbortSignal.timeout(4000) });
+    if (r.ok) return String((await r.json()).title || "").slice(0, 150) || "Vídeo do YouTube";
+  } catch {}
+  return "Vídeo do YouTube";
 }

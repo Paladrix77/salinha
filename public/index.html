@@ -108,7 +108,43 @@
   #medidor-barra { height:100%; width:0; background:var(--sub); transition:width .08s; }
   #medidor-barra.ok { background:var(--verde); }
 
+  /* Assistir junto */
+  #form-link { display:flex; gap:8px; padding:12px 16px; border-bottom:1px solid #0006; flex-wrap:wrap; }
+  #campo-link { flex:1; min-width:200px; }
+  #assistir-corpo { flex:1; display:flex; min-height:0; overflow:auto; }
+  #assistir-principal { flex:1; padding:16px; min-width:0; }
+  #assistir-entrar { text-align:center; padding:40px 16px; color:var(--sub); }
+  #player-caixa { background:#000; border-radius:12px; overflow:hidden; display:flex; flex-direction:column; }
+  #video-area { position:relative; width:100%; aspect-ratio:16/9; max-height:calc(100vh - 290px); }
+  #yt { position:absolute; inset:0; width:100%; height:100%; }
+  #bloqueio { position:absolute; inset:0; }
+  #tocar-overlay { position:absolute; inset:0; margin:auto; width:fit-content; height:fit-content; padding:14px 22px; background:var(--azul); color:#fff; border:none; border-radius:10px; font-weight:700; font-size:16px; }
+  #controles-video { display:flex; align-items:center; gap:10px; padding:8px 12px; background:#111215; }
+  #controles-video button { background:none; border:none; color:#fff; font-size:18px; padding:2px 4px; }
+  #tempo-video { font-size:12px; color:var(--sub); white-space:nowrap; font-variant-numeric:tabular-nums; }
+  #barra-video { flex:1; min-width:60px; accent-color:var(--azul); }
+  #vol-video { width:80px; accent-color:var(--azul); }
+  #player-caixa:fullscreen { border-radius:0; }
+  #player-caixa:fullscreen #video-area { max-height:none; flex:1; aspect-ratio:auto; }
+  #assistir-titulo { font-weight:700; margin-top:12px; }
+  #assistir-acao { color:var(--sub); font-size:13px; margin-top:2px; }
+  .linha-botoes { display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; }
+  #fila-lado { width:290px; border-left:1px solid #0006; padding:8px; overflow-y:auto; flex-shrink:0; }
+  .fila-item { display:flex; gap:8px; align-items:center; padding:6px; border-radius:8px; }
+  .fila-item:hover { background:var(--bg2); }
+  .fila-item img { width:80px; height:45px; object-fit:cover; border-radius:6px; flex-shrink:0; background:var(--bg0); }
+  .fila-txt { flex:1; min-width:0; }
+  .fila-titulo { font-size:13px; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+  .fila-por { font-size:11px; color:var(--sub); }
+  .fila-x { background:none; border:none; color:var(--sub); }
+  .fila-x:hover { color:var(--verm); }
+  .fila-vazia { color:var(--sub); font-size:13px; padding:8px; }
+
   @media (max-width: 800px) {
+    #assistir-corpo { flex-direction:column; }
+    #fila-lado { width:auto; border-left:none; border-top:1px solid #0006; overflow:visible; }
+    #assistir-principal { padding:10px; }
+    .so-pc { display:none; }
     #membros { display:none; }
     #menu-btn { display:block; }
     #lateral { position:fixed; inset:0 auto 0 0; z-index:5; transform:translateX(-100%); transition:transform .2s; box-shadow:10px 0 30px #0008; }
@@ -137,6 +173,8 @@
     <div class="secao">Voz</div>
     <div style="padding:0 8px"><button class="item" id="item-voz">🔊 Sala de voz</button></div>
     <div id="lista-voz-sidebar"></div>
+    <div class="secao">Assistir</div>
+    <div style="padding:0 8px"><button class="item" id="item-assistir">📺 Assistir junto</button></div>
     <div class="secao">Jogos</div>
     <div style="padding:0 8px"><button class="item" id="item-jogos">🎮 Jogos</button></div>
     <div id="rodape">
@@ -172,6 +210,46 @@
         <button class="btn sec" id="btn-tela">🖥️ Tela</button>
         <button class="btn sec" id="btn-config">⚙️ Configurar</button>
         <button class="btn verm" id="btn-sair">Sair da call</button>
+      </div>
+    </section>
+
+    <section id="vista-assistir" class="vista esc">
+      <form id="form-link">
+        <input class="campo" id="campo-link" placeholder="Cole um link do YouTube" autocomplete="off">
+        <button class="btn" type="submit">▶ Tocar agora</button>
+        <button class="btn sec" type="button" id="btn-fila">+ Fila</button>
+      </form>
+      <div id="assistir-corpo">
+        <div id="assistir-principal">
+          <div id="assistir-entrar">
+            <p id="assistir-entrar-info"></p>
+            <button class="btn" id="btn-entrar-sessao">📺 Entrar na sessão</button>
+          </div>
+          <div id="palco" class="esc">
+            <div id="player-caixa">
+              <div id="video-area">
+                <div id="yt"></div>
+                <div id="bloqueio"></div>
+                <button id="tocar-overlay" class="esc">▶ Toque para liberar o vídeo</button>
+              </div>
+              <div id="controles-video">
+                <button id="btn-play-video" title="Play / pausa (pra todos)">▶</button>
+                <span id="tempo-video">0:00 / 0:00</span>
+                <input type="range" id="barra-video" min="0" max="1" step="0.1" value="0">
+                <span class="so-pc">🔊</span><input type="range" id="vol-video" class="so-pc" min="0" max="100" value="80" title="Volume (só pra você)">
+                <button id="btn-prox-video" title="Próximo da fila">⏭</button>
+                <button id="btn-tela-video" title="Tela cheia">⛶</button>
+              </div>
+            </div>
+            <div id="assistir-titulo"></div>
+            <div id="assistir-acao"></div>
+            <div class="linha-botoes">
+              <button class="btn sec" id="btn-parar-video">⏹ Parar pra todos</button>
+              <button class="btn sec" id="btn-sair-sessao">Sair da sessão</button>
+            </div>
+          </div>
+        </div>
+        <aside id="fila-lado"><div class="secao">Fila</div><div id="lista-fila"></div></aside>
       </div>
     </section>
 
@@ -240,7 +318,7 @@ function tratar(m) {
     case "bemvindo":
       eu.id = m.id; canais = m.canais; historico = m.historico;
       $("eu-nome").textContent = "👤 " + eu.nome; $("eu-nome").dataset.fala = eu.id;
-      renderCanais(); renderMensagens();
+      renderCanais(); renderMensagens(); receberAssistir(m.assistir, m.agora);
       if (conectadoAntes) adicionarSistema("Reconectado!");
       conectadoAntes = true;
       break;
@@ -256,6 +334,7 @@ function tratar(m) {
       break;
     case "sistema": adicionarSistema(m.texto); break;
     case "sinal": tratarSinal(m.de, m.dados); break;
+    case "assistir": receberAssistir(m.estado, m.agora); break;
     case "jogo":
       if (jogoAtual && m.jogo === jogoAtual.id) $("quadro-jogo").contentWindow?.postMessage({ salinha: true, tipo: "recebido", de: m.de, nome: m.nome, dados: m.dados }, "*");
       break;
@@ -265,10 +344,11 @@ function tratar(m) {
 // =================== NAVEGAÇÃO ===================
 function mostrar(qual) {
   vista = qual;
-  for (const v of ["texto", "voz", "jogos"]) $("vista-" + v).classList.toggle("esc", v !== qual);
+  for (const v of ["texto", "voz", "assistir", "jogos"]) $("vista-" + v).classList.toggle("esc", v !== qual);
   $("item-voz").classList.toggle("ativo", qual === "voz");
   $("item-jogos").classList.toggle("ativo", qual === "jogos");
-  $("titulo").textContent = qual === "texto" ? "# " + canalAtual : qual === "voz" ? "🔊 Sala de voz" : "🎮 Jogos" + (jogoAtual ? " — " + jogoAtual.nome : "");
+  $("item-assistir").classList.toggle("ativo", qual === "assistir");
+  $("titulo").textContent = qual === "texto" ? "# " + canalAtual : qual === "voz" ? "🔊 Sala de voz" : qual === "assistir" ? "📺 Assistir junto" : "🎮 Jogos" + (jogoAtual ? " — " + jogoAtual.nome : "");
   if (qual === "texto") { naoLidas[canalAtual] = 0; renderMensagens(); }
   renderCanais();
   $("lateral").classList.remove("aberto");
@@ -685,6 +765,160 @@ async function iniciarTeste() {
 }
 function pararTeste() { pararAnalise("teste"); streamTeste?.getTracks().forEach((t) => t.stop()); streamTeste = null; }
 function fecharConfig() { $("config").classList.add("esc"); pararTeste(); }
+
+// =================== ASSISTIR JUNTO (YouTube sincronizado) ===================
+let assistir = { videoId: null, titulo: "", tocando: false, posicao: 0, atualizadoEm: 0, fila: [], ultimaAcao: "" };
+let offsetRelogio = 0, yt = null, ytPronto = false, ytCarregando = false, participando = false;
+let videoCarregado = null, travadoCont = 0, arrastandoBarra = false;
+
+function receberAssistir(estado, agoraServidor) {
+  if (!estado) return;
+  assistir = estado;
+  if (agoraServidor) offsetRelogio = agoraServidor - Date.now();
+  renderAssistir();
+  aplicarAssistir();
+}
+
+function posEsperada() {
+  return assistir.posicao + (assistir.tocando ? (Date.now() + offsetRelogio - assistir.atualizadoEm) / 1000 : 0);
+}
+
+function carregarYT() {
+  if (ytCarregando) return;
+  ytCarregando = true;
+  window.onYouTubeIframeAPIReady = () => {
+    yt = new YT.Player("yt", {
+      width: "100%", height: "100%",
+      playerVars: { controls: 0, disablekb: 1, modestbranding: 1, rel: 0, playsinline: 1, iv_load_policy: 3, fs: 0 },
+      events: {
+        onReady: () => {
+          ytPronto = true;
+          const vol = parseInt(lerLocal("salinha-volume") || "80");
+          yt.setVolume(vol); $("vol-video").value = vol;
+          aplicarAssistir();
+        },
+        onStateChange: (e) => {
+          if (e.data === 0 && assistir.videoId) enviar({ t: "assistir", acao: "fim", videoId: assistir.videoId });
+          if (e.data === 1) { travadoCont = 0; $("tocar-overlay").classList.add("esc"); }
+          atualizarTempo();
+        },
+      },
+    });
+  };
+  const s = document.createElement("script"); s.src = "https://www.youtube.com/iframe_api"; document.head.appendChild(s);
+}
+
+function entrarSessao() {
+  participando = true;
+  carregarYT();
+  aplicarAssistir();
+  renderAssistir();
+}
+function sairSessao() {
+  participando = false; videoCarregado = null;
+  if (ytPronto) yt.stopVideo();
+  renderAssistir();
+}
+
+// Faz o player local ficar igual ao estado da sala
+function aplicarAssistir() {
+  if (!participando || !ytPronto) return;
+  if (!assistir.videoId) { if (videoCarregado) { yt.stopVideo(); videoCarregado = null; } return; }
+  const esperado = posEsperada();
+  if (videoCarregado !== assistir.videoId) {
+    videoCarregado = assistir.videoId; travadoCont = 0;
+    if (assistir.tocando) yt.loadVideoById({ videoId: assistir.videoId, startSeconds: esperado });
+    else yt.cueVideoById({ videoId: assistir.videoId, startSeconds: esperado });
+    return;
+  }
+  const st = yt.getPlayerState(), atual = yt.getCurrentTime() || 0, dur = yt.getDuration() || 0;
+  if (st === 0 || (dur && esperado > dur - 0.5)) return; // terminou: espera a sala avançar
+  if (assistir.tocando) {
+    if (st !== 1 && st !== 3) yt.playVideo();
+    if (Math.abs(atual - esperado) > 2) yt.seekTo(esperado, true);
+  } else {
+    if (st === 1 || st === 3) yt.pauseVideo();
+    if (st !== 5 && Math.abs(atual - esperado) > 1) yt.seekTo(esperado, true);
+  }
+}
+
+// Confere a sincronia a cada segundo e detecta navegador bloqueando o som
+setInterval(() => {
+  if (!participando || !ytPronto || !assistir.videoId) return;
+  aplicarAssistir();
+  const st = yt.getPlayerState();
+  if (assistir.tocando && (st === -1 || st === 2 || st === 5)) travadoCont++; else travadoCont = 0;
+  $("tocar-overlay").classList.toggle("esc", travadoCont < 3);
+  atualizarTempo();
+}, 1000);
+
+function fmtTempo(s) {
+  s = Math.max(0, Math.floor(s || 0));
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), seg = String(s % 60).padStart(2, "0");
+  return h ? `${h}:${String(m).padStart(2, "0")}:${seg}` : `${m}:${seg}`;
+}
+function atualizarTempo() {
+  const dur = ytPronto && videoCarregado ? yt.getDuration() || 0 : 0;
+  const atual = ytPronto && videoCarregado ? yt.getCurrentTime() || 0 : posEsperada();
+  if (!arrastandoBarra) { $("barra-video").max = Math.max(1, dur); $("barra-video").value = atual; }
+  $("tempo-video").textContent = `${fmtTempo(arrastandoBarra ? $("barra-video").value : atual)} / ${fmtTempo(dur)}`;
+  $("btn-play-video").textContent = assistir.tocando ? "⏸" : "▶";
+}
+
+function renderAssistir() {
+  const temVideo = !!assistir.videoId;
+  $("item-assistir").textContent = temVideo && assistir.tocando ? "📺 Assistir (ao vivo)" : "📺 Assistir junto";
+  $("assistir-entrar").classList.toggle("esc", participando);
+  $("palco").classList.toggle("esc", !participando);
+  $("assistir-titulo").textContent = temVideo ? (assistir.tocando ? "▶ " : "⏸ ") + assistir.titulo : "Nada tocando. Cole um link do YouTube acima.";
+  $("assistir-acao").textContent = assistir.ultimaAcao || "";
+  $("assistir-entrar-info").textContent = temVideo ? `Tocando agora: ${assistir.titulo}` : "Ninguém colocou vídeo ainda.";
+  const lista = $("lista-fila"); lista.replaceChildren();
+  if (!assistir.fila.length) {
+    const v = document.createElement("div"); v.className = "fila-vazia"; v.textContent = "Fila vazia"; lista.appendChild(v);
+  }
+  assistir.fila.forEach((item, i) => {
+    const d = document.createElement("div"); d.className = "fila-item";
+    const img = document.createElement("img"); img.src = `https://i.ytimg.com/vi/${item.videoId}/mqdefault.jpg`; img.alt = "";
+    const txt = document.createElement("div"); txt.className = "fila-txt";
+    const t = document.createElement("div"); t.className = "fila-titulo"; t.textContent = item.titulo;
+    const p = document.createElement("div"); p.className = "fila-por"; p.textContent = "por " + item.por;
+    txt.append(t, p);
+    const x = document.createElement("button"); x.className = "fila-x"; x.title = "Tirar da fila"; x.textContent = "✕";
+    x.onclick = () => enviar({ t: "assistir", acao: "remover", indice: i });
+    d.append(img, txt, x); lista.appendChild(d);
+  });
+  atualizarTempo();
+}
+
+function enviarLink(acao) {
+  const url = $("campo-link").value.trim(); if (!url) return;
+  if (!/(youtu\.be\/|youtube\.com\/|^[\w-]{11}$)/.test(url)) return alert("Cole um link do YouTube (youtube.com ou youtu.be).");
+  enviar({ t: "assistir", acao, url });
+  $("campo-link").value = "";
+  if (!participando) entrarSessao();
+}
+
+$("form-link").onsubmit = (e) => { e.preventDefault(); enviarLink("tocar"); };
+$("btn-fila").onclick = () => enviarLink("fila");
+$("btn-entrar-sessao").onclick = entrarSessao;
+$("btn-sair-sessao").onclick = sairSessao;
+$("btn-play-video").onclick = () => {
+  if (!assistir.videoId) return;
+  const pos = ytPronto && videoCarregado ? yt.getCurrentTime() : undefined;
+  enviar({ t: "assistir", acao: assistir.tocando ? "pause" : "play", posicao: pos });
+};
+$("btn-prox-video").onclick = () => enviar({ t: "assistir", acao: "proximo" });
+$("btn-parar-video").onclick = () => { if (assistir.videoId && confirm("Parar o vídeo pra todo mundo?")) enviar({ t: "assistir", acao: "parar" }); };
+$("barra-video").oninput = () => { arrastandoBarra = true; atualizarTempo(); };
+$("barra-video").onchange = () => { arrastandoBarra = false; enviar({ t: "assistir", acao: "seek", posicao: parseFloat($("barra-video").value) }); };
+$("vol-video").oninput = (e) => { if (ytPronto) { yt.unMute(); yt.setVolume(+e.target.value); } salvarLocal("salinha-volume", e.target.value); };
+$("btn-tela-video").onclick = () => {
+  const p = $("player-caixa");
+  if (document.fullscreenElement) document.exitFullscreen(); else (p.requestFullscreen || p.webkitRequestFullscreen)?.call(p);
+};
+$("tocar-overlay").onclick = () => { if (ytPronto) { yt.unMute(); yt.playVideo(); } travadoCont = 0; $("tocar-overlay").classList.add("esc"); };
+$("item-assistir").onclick = () => mostrar("assistir");
 
 // =================== JOGOS ===================
 function renderJogos() {
