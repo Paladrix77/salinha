@@ -156,15 +156,15 @@ export class Sala extends DurableObject {
     const agora = Date.now();
     const posAgora = () => a.posicao + (a.tocando ? (agora - a.atualizadoEm) / 1000 : 0);
     const num = (v, padrao) => (typeof v === "number" && isFinite(v) && v >= 0 ? v : padrao);
-    const iniciar = (item) => { a.videoId = item.videoId; a.titulo = item.titulo; a.tocando = true; a.posicao = 0; a.noAoVivo = true; };
+    const iniciar = (item) => { a.videoId = item.videoId; a.tipo = item.tipo; a.ref = item.ref; a.titulo = item.titulo; a.tocando = true; a.posicao = 0; a.noAoVivo = true; };
     let acao = "";
 
     switch (m.acao) {
       case "tocar":
       case "fila": {
-        const videoId = idDoYoutube(m.url);
-        if (!videoId) return;
-        const item = { videoId, titulo: await tituloDoYoutube(videoId), por: eu.nome };
+        const link = interpretarLink(m.url);
+        if (!link) return;
+        const item = { ...link, titulo: await tituloDoLink(link), por: eu.nome };
         if (m.acao === "tocar" || !a.videoId) { iniciar(item); acao = `${eu.nome} colocou: ${item.titulo}`; }
         else { a.fila.push(item); a.fila = a.fila.slice(0, 50); acao = `${eu.nome} adicionou na fila: ${item.titulo}`; }
         break;
@@ -197,7 +197,7 @@ export class Sala extends DurableObject {
         acao = `${eu.nome} tirou da fila: ${a.fila.splice(m.indice, 1)[0].titulo}`;
         break;
       case "parar":
-        a.videoId = null; a.titulo = ""; a.tocando = false; a.posicao = 0; acao = `${eu.nome} parou o vídeo`;
+        a.videoId = null; a.tipo = null; a.ref = null; a.titulo = ""; a.tocando = false; a.posicao = 0; acao = `${eu.nome} parou o vídeo`;
         break;
       default:
         return;
@@ -225,7 +225,27 @@ export class Sala extends DurableObject {
   }
 }
 
-// ---------- helpers do YouTube ----------
+// ---------- helpers de links (YouTube e Twitch) ----------
+function interpretarLink(url) {
+  const txt = String(url || "").trim();
+  const vod = txt.match(/twitch\.tv\/videos\/(\d+)/i);
+  if (vod) return { tipo: "twitch-vod", ref: vod[1], videoId: "twv:" + vod[1] };
+  const canal = txt.match(/twitch\.tv\/([a-z0-9_]{3,25})(?:[\/?#]|$)/i);
+  if (canal && !["videos", "directory", "p", "settings", "search", "downloads"].includes(canal[1].toLowerCase())) {
+    const c = canal[1].toLowerCase();
+    return { tipo: "twitch-live", ref: c, videoId: "twl:" + c };
+  }
+  const yt = idDoYoutube(txt);
+  if (yt) return { tipo: "youtube", ref: yt, videoId: yt };
+  return null;
+}
+
+async function tituloDoLink(link) {
+  if (link.tipo === "twitch-live") return `🟣 ${link.ref} (Twitch ao vivo)`;
+  if (link.tipo === "twitch-vod") return `🟣 Vídeo da Twitch #${link.ref}`;
+  return tituloDoYoutube(link.ref);
+}
+
 function idDoYoutube(url) {
   const txt = String(url || "").trim();
   if (/^[\w-]{11}$/.test(txt)) return txt;
