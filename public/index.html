@@ -75,6 +75,32 @@
   .mini { width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:13px; color:#fff; flex-shrink:0; }
   .icones { margin-left:auto; font-size:12px; }
 
+  .bloco { transition: border-color .1s, box-shadow .1s; }
+  .bloco.video { cursor:pointer; }
+  .bloco.falando { border-color:var(--verde); box-shadow:0 0 0 2px var(--verde), 0 0 18px #3ba55d66; }
+  .bloco.av .avatar { transition:box-shadow .1s; }
+  .bloco.av.falando .avatar { box-shadow:0 0 0 4px var(--verde), 0 0 20px var(--verde); }
+  .tela-cheia { position:absolute; top:8px; right:8px; background:#000a; color:#fff; border:none; border-radius:6px; padding:4px 9px; font-size:16px; opacity:0; transition:opacity .15s; }
+  .bloco:hover .tela-cheia { opacity:1; }
+  .bloco:fullscreen { aspect-ratio:auto; border-radius:0; border:none; }
+  #grade.foco { grid-template-columns:repeat(auto-fill, minmax(160px, 1fr)); }
+  #grade.foco .bloco.principal { grid-column:1 / -1; order:-1; aspect-ratio:auto; height:calc(100vh - 240px); min-height:240px; }
+  .voz-user::before { content:""; width:8px; height:8px; border-radius:50%; background:var(--bg3); align-self:center; flex-shrink:0; }
+  .voz-user.falando { color:var(--txt); }
+  .voz-user.falando::before { background:var(--verde); box-shadow:0 0 6px var(--verde); }
+  #eu-linha { display:flex; align-items:center; gap:8px; }
+  #eu-nome { flex:1; transition:color .1s; } #eu-nome.falando { color:var(--verde); }
+  #btn-config-mini { background:none; border:none; color:var(--sub); font-size:18px; }
+  #btn-config-mini:hover { color:var(--txt); }
+  .modal { position:fixed; inset:0; background:#000b; display:flex; align-items:center; justify-content:center; z-index:20; }
+  .modal .caixa { background:var(--bg2); padding:22px; border-radius:14px; width:min(440px, 92vw); display:flex; flex-direction:column; gap:12px; }
+  .modal h3 { margin:0; }
+  .modal label { display:flex; flex-direction:column; gap:6px; font-size:13px; color:var(--sub); font-weight:600; }
+  .modal small { color:var(--sub); }
+  .medidor { height:10px; background:var(--bg0); border-radius:6px; overflow:hidden; }
+  #medidor-barra { height:100%; width:0; background:var(--sub); transition:width .08s; }
+  #medidor-barra.ok { background:var(--verde); }
+
   @media (max-width: 800px) {
     #membros { display:none; }
     #menu-btn { display:block; }
@@ -113,7 +139,7 @@
           <button class="btn verm" id="mini-sair" title="Sair da call">📞</button>
         </div>
       </div>
-      <div id="eu-nome"></div>
+      <div id="eu-linha"><div id="eu-nome"></div><button id="btn-config-mini" title="Configurações de voz e vídeo">⚙️</button></div>
     </div>
   </nav>
 
@@ -135,6 +161,7 @@
         <button class="btn on" id="btn-mic">🎤 Microfone</button>
         <button class="btn sec" id="btn-cam">📷 Câmera</button>
         <button class="btn sec" id="btn-tela">🖥️ Tela</button>
+        <button class="btn sec" id="btn-config">⚙️ Configurar</button>
         <button class="btn verm" id="btn-sair">Sair da call</button>
       </div>
     </section>
@@ -147,6 +174,18 @@
   </main>
 
   <aside id="membros"></aside>
+</div>
+
+<div id="config" class="modal esc">
+  <div class="caixa">
+    <h3>⚙️ Voz e vídeo</h3>
+    <label>Microfone <select id="sel-mic" class="campo"></select></label>
+    <div class="medidor"><div id="medidor-barra"></div></div>
+    <small>Fale algo: se a barra fica <b style="color:var(--verde)">verde</b>, sua voz está saindo.</small>
+    <label id="linha-saida">Saída de áudio (fone / caixa de som) <select id="sel-saida" class="campo"></select></label>
+    <label>Câmera <select id="sel-cam" class="campo"></select></label>
+    <button class="btn" id="fechar-config">Pronto</button>
+  </div>
 </div>
 
 <script>
@@ -191,7 +230,7 @@ function tratar(m) {
   switch (m.t) {
     case "bemvindo":
       eu.id = m.id; canais = m.canais; historico = m.historico;
-      $("eu-nome").textContent = "👤 " + eu.nome;
+      $("eu-nome").textContent = "👤 " + eu.nome; $("eu-nome").dataset.fala = eu.id;
       renderCanais(); renderMensagens();
       if (conectadoAntes) adicionarSistema("Reconectado!");
       conectadoAntes = true;
@@ -278,18 +317,38 @@ function renderMembros() {
 function renderVozSidebar() {
   const el = $("lista-voz-sidebar"); el.replaceChildren();
   for (const u of usuarios.filter((u) => u.voz)) {
-    const d = document.createElement("div"); d.className = "voz-user"; d.textContent = u.nome + " " + icones(u).replace("🔊", "");
+    const d = document.createElement("div"); d.className = "voz-user"; d.dataset.fala = u.id; d.textContent = u.nome + " " + icones(u).replace("🔊", "");
     el.appendChild(d);
   }
 }
 
 // =================== VOZ / VÍDEO (WebRTC direto entre navegadores) ===================
+const pref = { mic: lerLocal("salinha-mic") || "", cam: lerLocal("salinha-cam") || "", saida: lerLocal("salinha-saida") || "" };
+let ctxAudio, focoEl = null, streamTeste = null;
+
+// Navegadores só liberam áudio depois de um clique
+function garantirAudio() {
+  try { ctxAudio ||= new AudioContext(); if (ctxAudio.state === "suspended") ctxAudio.resume(); } catch {}
+}
+document.addEventListener("click", garantirAudio);
+
+async function pegarMic(deviceId) {
+  const base = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
+  try { return await navigator.mediaDevices.getUserMedia({ audio: deviceId ? { ...base, deviceId: { exact: deviceId } } : base }); }
+  catch (e) { if (deviceId) return navigator.mediaDevices.getUserMedia({ audio: base }); throw e; }
+}
+async function pegarCam(deviceId) {
+  const base = { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 24 } };
+  try { return await navigator.mediaDevices.getUserMedia({ video: deviceId ? { ...base, deviceId: { exact: deviceId } } : base }); }
+  catch (e) { if (deviceId) return navigator.mediaDevices.getUserMedia({ video: base }); throw e; }
+}
+
 async function entrarVoz() {
   if (emVoz) return;
-  try {
-    streamMic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
-    detectarFala(streamMic, "local-mic");
-  } catch (e) { alert("Não consegui acessar o microfone (" + e.message + "). Você vai entrar só ouvindo."); streamMic = null; }
+  garantirAudio();
+  pararTeste();
+  try { streamMic = await pegarMic(pref.mic); detectarFala(streamMic, "local"); }
+  catch (e) { alert("Não consegui acessar o microfone (" + e.message + "). Você vai entrar só ouvindo."); streamMic = null; }
   emVoz = true;
   enviar({ t: "voz", ativo: true });
   enviarMidia();
@@ -301,14 +360,16 @@ function sairVoz(silencioso) {
   for (const id of [...peers.keys()]) fecharPeer(id);
   for (const s of [streamMic, streamCam, streamTela]) s?.getTracks().forEach((t) => t.stop());
   streamMic = streamCam = streamTela = null;
-  emVoz = false;
+  for (const k of Object.keys(analisadores)) if (k !== "teste") pararAnalise(k);
+  emVoz = false; focoEl = null;
+  for (const k of Object.keys(blocosLocais)) delete blocosLocais[k];
   if (!silencioso) enviar({ t: "voz", ativo: false });
   $("grade").replaceChildren();
   atualizarUIVoz();
 }
 
 function enviarMidia() {
-  enviar({ t: "midia", mic: !!streamMic?.getAudioTracks()[0]?.enabled, cam: !!streamCam, tela: !!streamTela });
+  enviar({ t: "midia", mic: !!streamMic?.getAudioTracks()[0]?.enabled, cam: !!streamCam, tela: !!streamTela, camId: streamCam?.id || "", telaId: streamTela?.id || "" });
 }
 
 function atualizarUIVoz() {
@@ -321,19 +382,20 @@ function atualizarUIVoz() {
   $("mini-mic").textContent = micOn ? "🎤" : "🔇";
   $("btn-cam").className = "btn " + (streamCam ? "on" : "sec");
   $("btn-tela").className = "btn " + (streamTela ? "on" : "sec");
+  $("eu-nome").dataset.fala = eu.id || "";
   atualizarBlocos();
 }
 
 function alternarMic() {
   const t = streamMic?.getAudioTracks()[0];
-  if (!t) return alert("Sem microfone. Saia e entre na call de novo pra tentar outra vez.");
+  if (!t) return alert("Sem microfone. Escolha um nas configurações (⚙️) ou saia e entre de novo.");
   t.enabled = !t.enabled; enviarMidia(); atualizarUIVoz();
 }
 
 async function alternarCam() {
   if (streamCam) { removerStream("cam"); streamCam.getTracks().forEach((t) => t.stop()); streamCam = null; }
   else {
-    try { streamCam = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 640 }, height: { ideal: 360 }, frameRate: { ideal: 24 } } }); }
+    try { streamCam = await pegarCam(pref.cam); }
     catch (e) { return alert("Não consegui abrir a câmera: " + e.message); }
     adicionarStream("cam", streamCam);
   }
@@ -343,9 +405,10 @@ async function alternarCam() {
 async function alternarTela() {
   if (streamTela) return pararTela();
   if (!navigator.mediaDevices.getDisplayMedia) return alert("Seu navegador não permite compartilhar a tela (no celular geralmente não funciona). Use no PC.");
-  try { streamTela = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: 15 } }, audio: true }); }
+  try { streamTela = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: 30 }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: true }); }
   catch { return; }
   streamTela.getVideoTracks()[0].onended = pararTela;
+  try { streamTela.getVideoTracks()[0].contentHint = "detail"; } catch {}
   adicionarStream("tela", streamTela);
   enviarMidia(); atualizarUIVoz();
 }
@@ -353,6 +416,31 @@ function pararTela() {
   if (!streamTela) return;
   removerStream("tela"); streamTela.getTracks().forEach((t) => t.stop()); streamTela = null;
   enviarMidia(); atualizarUIVoz();
+}
+
+// ---- trocar dispositivos ----
+async function trocarMic(id) {
+  pref.mic = id; salvarLocal("salinha-mic", id);
+  if (!emVoz) return;
+  let novo;
+  try { novo = await pegarMic(id); } catch (e) { return alert("Não consegui usar esse microfone: " + e.message); }
+  const track = novo.getAudioTracks()[0];
+  if (streamMic && !streamMic.getAudioTracks()[0]?.enabled) track.enabled = false;
+  for (const p of peers.values()) {
+    if (p.senders.mic?.length) await p.senders.mic[0].replaceTrack(track);
+    else p.senders.mic = [p.pc.addTrack(track, novo)];
+  }
+  streamMic?.getTracks().forEach((t) => t.stop());
+  streamMic = novo; detectarFala(novo, "local");
+  enviarMidia(); atualizarUIVoz();
+}
+async function trocarCam(id) {
+  pref.cam = id; salvarLocal("salinha-cam", id);
+  if (streamCam) { await alternarCam(); await alternarCam(); }
+}
+function trocarSaida(id) {
+  pref.saida = id; salvarLocal("salinha-saida", id);
+  document.querySelectorAll("#grade audio, #grade video:not([muted])").forEach((el) => el.setSinkId?.(id).catch(() => {}));
 }
 
 function adicionarStream(tipo, stream) {
@@ -390,7 +478,7 @@ function criarPeer(id) {
 function fecharPeer(id) {
   const p = peers.get(id); if (!p) return;
   p.pc.close(); peers.delete(id);
-  for (const [sid, r] of remotos) if (r.peerId === id) { r.el.remove(); remotos.delete(sid); }
+  for (const [sid, r] of remotos) if (r.peerId === id) { r.el.remove(); remotos.delete(sid); pararAnalise("r-" + sid); }
   atualizarBlocos();
 }
 
@@ -417,37 +505,95 @@ async function tratarSinal(de, { description, candidate }) {
 function adicionarRemoto(peerId, stream) {
   let r = remotos.get(stream.id);
   if (!r) {
-    r = { peerId, stream, el: document.createElement("div") };
+    r = { peerId, stream, el: null, temVideo: null };
     remotos.set(stream.id, r);
-    stream.onremovetrack = () => { if (!stream.getTracks().some((t) => t.readyState === "live")) { r.el.remove(); remotos.delete(stream.id); } atualizarBlocos(); };
+    stream.onremovetrack = () => {
+      if (!stream.getTracks().some((t) => t.readyState === "live")) {
+        r.el?.remove(); remotos.delete(stream.id); pararAnalise("r-" + stream.id);
+      }
+      atualizarBlocos();
+    };
   }
-  montarMidia(r);
+  const temVideo = stream.getVideoTracks().length > 0;
+  if (r.temVideo !== temVideo) {
+    r.el?.remove(); r.temVideo = temVideo;
+    if (temVideo) {
+      r.el = criarBlocoVideo(stream, {});
+      r.el.dataset.stream = stream.id; r.el.dataset.peer = peerId;
+    } else {
+      r.el = document.createElement("div"); r.el.className = "esc";
+      const a = document.createElement("audio"); a.autoplay = true; a.srcObject = stream;
+      if (pref.saida) a.setSinkId?.(pref.saida).catch(() => {});
+      r.el.appendChild(a);
+      detectarFala(stream, "r-" + stream.id, peerId);
+    }
+    $("grade").appendChild(r.el);
+  }
   atualizarBlocos();
 }
 
-function montarMidia(r) {
-  const temVideo = r.stream.getVideoTracks().length > 0;
-  r.el.replaceChildren();
-  if (temVideo) {
-    r.el.className = "bloco";
-    const v = document.createElement("video"); v.autoplay = true; v.playsInline = true; v.srcObject = r.stream;
-    v.onclick = () => v.requestFullscreen?.();
-    const l = document.createElement("div"); l.className = "rotulo"; l.dataset.peer = r.peerId;
-    r.el.append(v, l);
-  } else {
-    r.el.className = "esc";
-    const a = document.createElement("audio"); a.autoplay = true; a.srcObject = r.stream; r.el.appendChild(a);
-    detectarFala(r.stream, "fala-" + r.peerId);
-  }
-  if (!r.el.isConnected) $("grade").appendChild(r.el);
+function criarBlocoVideo(stream, { local = false, espelhar = false }) {
+  const b = document.createElement("div"); b.className = "bloco video";
+  const v = document.createElement("video"); v.autoplay = true; v.playsInline = true; v.srcObject = stream;
+  if (local) { v.muted = true; v.setAttribute("muted", ""); }
+  else if (pref.saida) v.setSinkId?.(pref.saida).catch(() => {});
+  if (espelhar) v.style.transform = "scaleX(-1)";
+  const l = document.createElement("div"); l.className = "rotulo";
+  const fs = document.createElement("button"); fs.className = "tela-cheia"; fs.title = "Tela cheia"; fs.textContent = "⛶";
+  fs.onclick = (e) => {
+    e.stopPropagation();
+    if (document.fullscreenElement) document.exitFullscreen();
+    else (b.requestFullscreen || b.webkitRequestFullscreen)?.call(b);
+  };
+  b.onclick = () => focar(b);
+  b.ondblclick = () => fs.click();
+  b.append(v, l, fs);
+  return b;
 }
 
-// Blocos com avatar de quem está na call + vídeos locais
+// Clicar num vídeo deixa ele grande (igual Discord); clicar de novo volta
+function focar(b) { focoEl = focoEl === b ? null : b; aplicarFoco(); }
+function aplicarFoco() {
+  const grade = $("grade");
+  if (focoEl && !focoEl.isConnected) focoEl = null;
+  grade.classList.toggle("foco", !!focoEl);
+  grade.querySelectorAll(".bloco").forEach((b) => b.classList.toggle("principal", b === focoEl));
+}
+
 const blocosLocais = {};
 function atualizarBlocos() {
   const grade = $("grade"); if (!emVoz) return;
   const naVoz = usuarios.filter((u) => u.voz);
-  // avatares
+  const comCam = new Set();
+  // vídeos remotos: descobrir se é câmera ou tela
+  grade.querySelectorAll(".bloco.video[data-stream]").forEach((b) => {
+    const sid = b.dataset.stream, dono = usuarios.find((u) => u.id === b.dataset.peer);
+    const ehTela = dono?.midia?.telaId === sid;
+    if (ehTela) {
+      b.dataset.fala = "";
+      b.querySelector(".rotulo").textContent = `🖥️ Tela de ${dono?.nome || "…"}`;
+      if (!b.dataset.vistoTela) { b.dataset.vistoTela = "1"; if (!focoEl) focoEl = b; } // abre grande sozinho
+    } else {
+      comCam.add(b.dataset.peer); b.dataset.fala = b.dataset.peer;
+      b.querySelector(".rotulo").textContent = (dono?.nome || "…") + " " + (dono ? icones(dono).replace("🔊", "") : "");
+    }
+  });
+  // vídeos locais (prévia)
+  for (const [tipo, stream] of [["cam", streamCam], ["tela", streamTela]]) {
+    const atual = blocosLocais[tipo];
+    if (atual && atual.querySelector("video").srcObject !== stream) { atual.remove(); delete blocosLocais[tipo]; }
+    if (stream && !blocosLocais[tipo]) {
+      const b = criarBlocoVideo(stream, { local: true, espelhar: tipo === "cam" });
+      grade.appendChild(b); blocosLocais[tipo] = b;
+    }
+    const b = blocosLocais[tipo];
+    if (b) {
+      b.dataset.fala = tipo === "cam" ? eu.id : "";
+      b.querySelector(".rotulo").textContent = tipo === "cam" ? "Você " + (streamMic?.getAudioTracks()[0]?.enabled ? "" : "🔇") : "🖥️ Sua tela";
+    }
+  }
+  if (streamCam) comCam.add(eu.id);
+  // avatares (some quando a pessoa liga a câmera)
   const ids = new Set(naVoz.map((u) => "av-" + u.id));
   grade.querySelectorAll(".bloco.av").forEach((b) => { if (!ids.has(b.id)) b.remove(); });
   for (const u of naVoz) {
@@ -458,44 +604,78 @@ function atualizarBlocos() {
       const l = document.createElement("div"); l.className = "rotulo"; b.appendChild(l);
       grade.prepend(b);
     }
+    b.dataset.fala = u.id;
+    b.classList.toggle("esc", comCam.has(u.id));
     b.querySelector(".avatar").textContent = inicial(u.nome); b.querySelector(".avatar").style.background = cor(u.nome);
     b.querySelector(".rotulo").textContent = (u.id === eu.id ? "Você" : u.nome) + " " + icones(u).replace("🔊", "");
   }
-  // vídeos locais (prévia)
-  for (const [tipo, stream] of [["cam", streamCam], ["tela", streamTela]]) {
-    if (stream && !blocosLocais[tipo]) {
-      const b = document.createElement("div"); b.className = "bloco";
-      const v = document.createElement("video"); v.autoplay = true; v.muted = true; v.playsInline = true; v.srcObject = stream;
-      if (tipo === "cam") v.style.transform = "scaleX(-1)";
-      const l = document.createElement("div"); l.className = "rotulo"; l.textContent = tipo === "cam" ? "Sua câmera" : "Sua tela";
-      b.append(v, l); grade.appendChild(b); blocosLocais[tipo] = b;
-    } else if (!stream && blocosLocais[tipo]) { blocosLocais[tipo].remove(); delete blocosLocais[tipo]; }
-  }
-  grade.querySelectorAll(".rotulo[data-peer]").forEach((l) => (l.textContent = nomeDe(l.dataset.peer)));
+  aplicarFoco();
 }
 
-// Borda verde em quem está falando
-const analisadores = {};
-let ctxAudio;
-function detectarFala(stream, chave) {
+// ---- Detector de fala: acende verde em quem está falando ----
+const analisadores = {}; // chave -> { an, src, id, ultimo }
+const LIMIAR = 0.012;
+function detectarFala(stream, chave, id) {
+  pararAnalise(chave);
   try {
-    ctxAudio ||= new AudioContext();
-    const an = ctxAudio.createAnalyser(); an.fftSize = 512;
-    ctxAudio.createMediaStreamSource(stream).connect(an);
-    analisadores[chave] = an;
-  } catch {}
+    garantirAudio();
+    const an = ctxAudio.createAnalyser(); an.fftSize = 1024;
+    const src = ctxAudio.createMediaStreamSource(stream); src.connect(an);
+    analisadores[chave] = { an, src, id: id || null, ultimo: 0, buf: new Float32Array(an.fftSize) };
+  } catch (e) { console.warn("detector de fala:", e); }
+}
+function pararAnalise(chave) {
+  const a = analisadores[chave];
+  if (a) { try { a.src.disconnect(); } catch {} delete analisadores[chave]; }
 }
 setInterval(() => {
-  if (!emVoz) return;
-  const buf = new Uint8Array(256);
-  for (const [chave, an] of Object.entries(analisadores)) {
-    an.getByteFrequencyData(buf);
-    const vol = buf.reduce((a, b) => a + b, 0) / buf.length;
-    const id = chave === "local-mic" ? eu.id : chave.slice(5);
-    const mutado = chave === "local-mic" && !streamMic?.getAudioTracks()[0]?.enabled;
-    $("av-" + id)?.classList.toggle("falando", vol > 12 && !mutado);
+  const agora = Date.now(), falando = new Set();
+  for (const [chave, a] of Object.entries(analisadores)) {
+    a.an.getFloatTimeDomainData(a.buf);
+    let s = 0; for (const x of a.buf) s += x * x;
+    const nivel = Math.sqrt(s / a.buf.length);
+    const ativo = chave !== "local" || !!streamMic?.getAudioTracks()[0]?.enabled;
+    if (nivel > LIMIAR && ativo) a.ultimo = agora;
+    if (chave === "local" || chave === "teste") atualizarMedidor(ativo ? nivel : 0);
+    if (chave !== "teste" && agora - a.ultimo < 350) falando.add(chave === "local" ? eu.id : a.id);
   }
-}, 150);
+  document.querySelectorAll(".falando").forEach((el) => { if (!falando.has(el.dataset.fala)) el.classList.remove("falando"); });
+  for (const id of falando) if (id) document.querySelectorAll(`[data-fala="${id}"]`).forEach((el) => el.classList.add("falando"));
+}, 80);
+
+function atualizarMedidor(nivel) {
+  const barra = $("medidor-barra"); if (!barra || $("config").classList.contains("esc")) return;
+  barra.style.width = Math.min(100, nivel * 500) + "%";
+  barra.classList.toggle("ok", nivel > LIMIAR);
+}
+
+// ---- Configurações (escolher microfone, saída e câmera) ----
+async function abrirConfig() {
+  garantirAudio();
+  $("config").classList.remove("esc");
+  let devs = await navigator.mediaDevices.enumerateDevices();
+  if (!devs.some((d) => d.kind === "audioinput" && d.label)) {
+    try { const s = await navigator.mediaDevices.getUserMedia({ audio: true }); s.getTracks().forEach((t) => t.stop()); devs = await navigator.mediaDevices.enumerateDevices(); } catch {}
+  }
+  preencher($("sel-mic"), devs.filter((d) => d.kind === "audioinput"), pref.mic, "Microfone");
+  preencher($("sel-cam"), devs.filter((d) => d.kind === "videoinput"), pref.cam, "Câmera");
+  const saidas = devs.filter((d) => d.kind === "audiooutput");
+  $("linha-saida").classList.toggle("esc", !("setSinkId" in HTMLMediaElement.prototype) || !saidas.length);
+  preencher($("sel-saida"), saidas, pref.saida, "Saída");
+  if (!emVoz) iniciarTeste();
+}
+function preencher(sel, lista, atual, nome) {
+  sel.replaceChildren(new Option("Padrão do sistema", ""));
+  lista.filter((d) => d.deviceId && d.deviceId !== "default" && d.deviceId !== "communications")
+    .forEach((d, i) => sel.add(new Option(d.label || `${nome} ${i + 1}`, d.deviceId)));
+  sel.value = [...sel.options].some((o) => o.value === atual) ? atual : "";
+}
+async function iniciarTeste() {
+  pararTeste();
+  try { streamTeste = await pegarMic(pref.mic); detectarFala(streamTeste, "teste"); } catch {}
+}
+function pararTeste() { pararAnalise("teste"); streamTeste?.getTracks().forEach((t) => t.stop()); streamTeste = null; }
+function fecharConfig() { $("config").classList.add("esc"); pararTeste(); }
 
 // =================== JOGOS ===================
 function renderJogos() {
@@ -544,6 +724,12 @@ $("btn-mic").onclick = alternarMic; $("mini-mic").onclick = alternarMic;
 $("btn-cam").onclick = alternarCam;
 $("btn-tela").onclick = alternarTela;
 $("btn-sair").onclick = () => sairVoz(); $("mini-sair").onclick = () => sairVoz();
+$("btn-config").onclick = abrirConfig; $("btn-config-mini").onclick = abrirConfig;
+$("fechar-config").onclick = fecharConfig;
+$("config").onclick = (e) => { if (e.target === $("config")) fecharConfig(); };
+$("sel-mic").onchange = async (e) => { await trocarMic(e.target.value); if (!emVoz && !$("config").classList.contains("esc")) iniciarTeste(); };
+$("sel-cam").onchange = (e) => trocarCam(e.target.value);
+$("sel-saida").onchange = (e) => trocarSaida(e.target.value);
 $("menu-btn").onclick = () => $("lateral").classList.toggle("aberto");
 </script>
 </body>

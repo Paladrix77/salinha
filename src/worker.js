@@ -124,7 +124,7 @@ export class Sala extends DurableObject {
         this.avisarUsuarios();
         break;
       case "midia":
-        eu.midia = { mic: !!m.mic, cam: !!m.cam, tela: !!m.tela };
+        eu.midia = { mic: !!m.mic, cam: !!m.cam, tela: !!m.tela, camId: String(m.camId || "").slice(0, 100), telaId: String(m.telaId || "").slice(0, 100) };
         ws.serializeAttachment(eu);
         this.avisarUsuarios();
         break;
