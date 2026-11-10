@@ -769,7 +769,8 @@ function fecharConfig() { $("config").classList.add("esc"); pararTeste(); }
 // =================== ASSISTIR JUNTO (YouTube sincronizado) ===================
 let assistir = { videoId: null, titulo: "", tocando: false, posicao: 0, atualizadoEm: 0, fila: [], ultimaAcao: "" };
 let offsetRelogio = 0, yt = null, ytPronto = false, ytCarregando = false, participando = false;
-let videoCarregado = null, travadoCont = 0, arrastandoBarra = false;
+let videoCarregado = null, travadoCont = 0, arrastandoBarra = false, aoVivoAjustado = null, erroVideo = "";
+function ehAoVivo() { try { return !!(ytPronto && videoCarregado && yt.getVideoData()?.isLive); } catch { return false; } }
 
 function receberAssistir(estado, agoraServidor) {
   if (!estado) return;
@@ -802,6 +803,12 @@ function carregarYT() {
           if (e.data === 1) { travadoCont = 0; $("tocar-overlay").classList.add("esc"); }
           atualizarTempo();
         },
+        onError: (e) => {
+          erroVideo = (e.data === 101 || e.data === 150)
+            ? "⚠️ Esse vídeo não pode ser exibido fora do YouTube (o dono bloqueou). Tente outro link."
+            : "⚠️ Vídeo indisponível ou link inválido.";
+          renderAssistir();
+        },
       },
     });
   };
@@ -826,12 +833,19 @@ function aplicarAssistir() {
   if (!assistir.videoId) { if (videoCarregado) { yt.stopVideo(); videoCarregado = null; } return; }
   const esperado = posEsperada();
   if (videoCarregado !== assistir.videoId) {
-    videoCarregado = assistir.videoId; travadoCont = 0;
+    videoCarregado = assistir.videoId; travadoCont = 0; aoVivoAjustado = null; erroVideo = "";
     if (assistir.tocando) yt.loadVideoById({ videoId: assistir.videoId, startSeconds: esperado });
     else yt.cueVideoById({ videoId: assistir.videoId, startSeconds: esperado });
     return;
   }
   const st = yt.getPlayerState(), atual = yt.getCurrentTime() || 0, dur = yt.getDuration() || 0;
+  // LIVE: não dá pra sincronizar por tempo; todo mundo fica no "ao vivo" e só play/pausa valem
+  if (ehAoVivo()) {
+    if (aoVivoAjustado !== videoCarregado && dur) { aoVivoAjustado = videoCarregado; yt.seekTo(dur, true); }
+    if (assistir.tocando && st !== 1 && st !== 3) { yt.playVideo(); if (st === 2 && dur) yt.seekTo(dur, true); }
+    if (!assistir.tocando && (st === 1 || st === 3)) yt.pauseVideo();
+    return;
+  }
   if (st === 0 || (dur && esperado > dur - 0.5)) return; // terminou: espera a sala avançar
   if (assistir.tocando) {
     if (st !== 1 && st !== 3) yt.playVideo();
@@ -858,6 +872,13 @@ function fmtTempo(s) {
   return h ? `${h}:${String(m).padStart(2, "0")}:${seg}` : `${m}:${seg}`;
 }
 function atualizarTempo() {
+  const live = ehAoVivo();
+  $("barra-video").classList.toggle("esc", live);
+  if (live) {
+    $("tempo-video").textContent = "🔴 AO VIVO";
+    $("btn-play-video").textContent = assistir.tocando ? "⏸" : "▶";
+    return;
+  }
   const dur = ytPronto && videoCarregado ? yt.getDuration() || 0 : 0;
   const atual = ytPronto && videoCarregado ? yt.getCurrentTime() || 0 : posEsperada();
   if (!arrastandoBarra) { $("barra-video").max = Math.max(1, dur); $("barra-video").value = atual; }
@@ -871,7 +892,7 @@ function renderAssistir() {
   $("assistir-entrar").classList.toggle("esc", participando);
   $("palco").classList.toggle("esc", !participando);
   $("assistir-titulo").textContent = temVideo ? (assistir.tocando ? "▶ " : "⏸ ") + assistir.titulo : "Nada tocando. Cole um link do YouTube acima.";
-  $("assistir-acao").textContent = assistir.ultimaAcao || "";
+  $("assistir-acao").textContent = erroVideo || assistir.ultimaAcao || "";
   $("assistir-entrar-info").textContent = temVideo ? `Tocando agora: ${assistir.titulo}` : "Ninguém colocou vídeo ainda.";
   const lista = $("lista-fila"); lista.replaceChildren();
   if (!assistir.fila.length) {
