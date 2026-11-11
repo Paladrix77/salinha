@@ -8,10 +8,14 @@ jobs:
     steps:
       - run: |
           D1=$(date -u -d '-4 days' +%Y%m%d); D2=$(date -u -d '+5 days' +%Y%m%d)
-          curl -s "https://site.api.espn.com/apis/site/v2/sports/soccer/bra.1/scoreboard?dates=$D1-$D2&limit=100" > s.json
-          echo "== topo"; jq -c 'keys' s.json; jq -c '.leagues[0] | {name, season: .season.year, slug}' s.json; jq '.events | length' s.json
-          echo "== eventos resumidos"; jq -c '.events[] | {id, date, st: .status.type.state, det: .status.type.shortDetail, clk: .status.displayClock, c: [.competitions[0].competitors[] | {h: .homeAway, s: .score, n: .team.displayName, sn: .team.shortDisplayName, a: .team.abbreviation}]}' s.json | head -30
-          echo "== evento completo (1 finalizado)"; jq -c '[.events[] | select(.status.type.state=="post")][0] | {status, comp: (.competitions[0] | {details, venue: .venue.fullName, competitors: [.competitors[] | {id, homeAway, score, winner, team: (.team | {id, displayName, shortDisplayName, abbreviation, logo})}]})}' s.json
-          echo "== standings"; curl -s "https://site.api.espn.com/apis/v2/sports/soccer/bra.1/standings" > t.json
+          UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/130 Safari/537.36"
+          for U in "https://site.api.espn.com/apis/site/v2/sports/soccer/bra.1/scoreboard?dates=$D1-$D2&limit=100" "https://site.api.espn.com/apis/site/v2/sports/soccer/bra.1/scoreboard" "https://site.web.api.espn.com/apis/v2/sports/soccer/bra.1/standings" "https://site.api.espn.com/apis/v2/sports/soccer/bra.1/standings"; do
+            echo "== $U"; curl -s -A "$UA" -o o.txt -w "http=%{http_code} tipo=%{content_type} bytes=%{size_download}\n" "$U"; head -c 300 o.txt; echo
+          done
+          curl -s -A "$UA" "https://site.api.espn.com/apis/site/v2/sports/soccer/bra.1/scoreboard?dates=$D1-$D2&limit=100" > s.json
+          echo "== liga"; jq -c '.leagues[0] | {name, season: .season.year}' s.json; jq '.events | length' s.json
+          echo "== eventos"; jq -c '.events[] | {id, date, st: .status.type.state, det: .status.type.shortDetail, clk: .status.displayClock, c: [.competitions[0].competitors[] | {h: .homeAway, s: .score, n: .team.displayName, sn: .team.shortDisplayName, a: .team.abbreviation}]}' s.json | head -30
+          echo "== completo"; jq -c '[.events[] | select(.status.type.state=="post")][0] | {status, comp: (.competitions[0] | {details, venue: .venue.fullName, competitors: [.competitors[] | {id, homeAway, score, winner, team: (.team | {id, displayName, shortDisplayName, abbreviation, logo})}]})}' s.json
+          echo "== tabela"; curl -s -A "$UA" "https://site.web.api.espn.com/apis/v2/sports/soccer/bra.1/standings" > t.json
           jq -c 'keys' t.json; jq -c '.children | length' t.json; jq -c '.children[0].standings.entries | length' t.json
           jq -c '.children[0].standings.entries[0:2][] | {team: (.team | {id, displayName, shortDisplayName, abbreviation, logo: .logos[0].href}), note: .note, stats: [.stats[] | {n: .name, v: .value, d: .displayValue}]}' t.json
