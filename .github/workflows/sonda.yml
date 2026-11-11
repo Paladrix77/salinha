@@ -1,0 +1,40 @@
+name: Sonda noticias
+on:
+  push:
+    branches: [dev]
+    paths: [".github/workflows/sonda.yml"]
+jobs:
+  sonda:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          set +e
+          for U in \
+            https://g1.globo.com/rss/g1/ \
+            https://ge.globo.com/rss/ge/futebol/ \
+            https://ge.globo.com/rss/ge/ \
+            https://rss.uol.com.br/feed/noticias.xml \
+            https://feeds.folha.uol.com.br/emcimadahora/rss091.xml \
+            https://feeds.folha.uol.com.br/esporte/rss091.xml \
+            https://feeds.bbci.co.uk/portuguese/rss.xml \
+            https://www.cnnbrasil.com.br/feed/ \
+            https://www.cnnbrasil.com.br/esportes/feed/ \
+            https://agenciabrasil.ebc.com.br/rss/ultimasnoticias/feed.xml \
+            https://agenciabrasil.ebc.com.br/rss/esportes/feed.xml \
+            https://www.lance.com.br/feed \
+            https://www.gazetaesportiva.com/feed/ \
+            https://www.estadao.com.br/arc/outboundfeeds/feeds/rss/sections/esportes/futebol/ \
+            https://www.terra.com.br/rss/Controller?channelid=8d2a7a8d2ee63210VgnVCM4000009bf154d0RCRD&ctName=atomo-noticia \
+            "https://site.api.espn.com/apis/site/v2/sports/soccer/bra.1/news?lang=pt&region=br&limit=5" \
+            https://www.metropoles.com/feed \
+            https://www.poder360.com.br/feed/ ; do
+            curl -sL --compressed -A "Mozilla/5.0 (Salinha)" -o o.txt -w "%{http_code} %{content_type} %{size_download}" "$U" > h.txt
+            n=$(grep -o "<item" o.txt | wc -l); img=$(grep -oE "media:content|media:thumbnail|<enclosure|<img" o.txt | sort | uniq -c | tr '\n' ' ')
+            enc=$(head -c 120 o.txt | grep -oi 'encoding="[^"]*"')
+            t=$(grep -o "<item.*" o.txt | head -1 | grep -oE "<title>[^<]{0,80}|CDATA\[[^]]{0,80}" | head -1)
+            echo "## $(cat h.txt) itens=$n $enc img=[$img] | $U"
+            echo "   $t"
+          done
+          echo "== ESPN news json"; curl -s --compressed "https://site.api.espn.com/apis/site/v2/sports/soccer/bra.1/news?lang=pt&region=br&limit=3" | jq -c '.articles[0:2][] | {headline, description, published, img: .images[0].url, link: .links.web.href}' 2>&1 | cut -c1-400
+          echo "== item g1"; curl -sL --compressed "https://g1.globo.com/rss/g1/" | grep -o "<item>.*" | head -c 1500; echo
+          echo "== item ge"; curl -sL --compressed "https://ge.globo.com/rss/ge/futebol/" | tr -d '\n' | grep -o "<item>.\{0,1500\}" | head -1; echo
