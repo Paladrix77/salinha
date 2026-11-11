@@ -417,7 +417,7 @@ function resumirTabela(t) {
 const FONTES = {
   futebol: [
     { nome: "ge", url: "https://ge.globo.com/rss/ge/futebol/" },
-    { nome: "ESPN", url: "https://site.api.espn.com/apis/site/v2/sports/soccer/bra.1/news?lang=pt&region=br&limit=30", json: "espn" },
+    { nome: "ESPN", url: "https://site.api.espn.com/apis/site/v2/sports/soccer/bra.1/news?lang=pt&region=br&limit=50", json: "espn" },
     { nome: "Gazeta Esportiva", url: "https://www.gazetaesportiva.com/feed/" },
     { nome: "Estadão", url: "https://www.estadao.com.br/arc/outboundfeeds/feeds/rss/sections/esportes/futebol/" },
     { nome: "Folha", url: "https://feeds.folha.uol.com.br/esporte/rss091.xml" },
@@ -435,12 +435,13 @@ const FONTES = {
 };
 
 async function buscarNoticias(cat) {
+  const limite = cat === "futebol" ? 60 : 25;
   const lotes = await Promise.allSettled(FONTES[cat].map(async (f) => {
     const r = await fetch(f.url, { headers: { "user-agent": "Mozilla/5.0 (Salinha)" }, signal: AbortSignal.timeout(8000) });
     if (!r.ok) throw new Error(f.nome + " HTTP " + r.status);
     if (f.json === "espn") {
       const j = await r.json();
-      return (j.articles || []).slice(0, 25).map((a) => ({
+      return (j.articles || []).slice(0, limite).map((a) => ({
         titulo: a.headline || "", link: a.links?.web?.href || "", resumo: a.description || "",
         imagem: a.images?.[0]?.url || "", data: a.published || "", fonte: f.nome,
       }));
@@ -448,7 +449,7 @@ async function buscarNoticias(cat) {
     const bytes = new Uint8Array(await r.arrayBuffer());
     const cabeca = new TextDecoder("latin1").decode(bytes.slice(0, 200)) + (r.headers.get("content-type") || "");
     const xml = /iso-8859-1|windows-1252/i.test(cabeca) ? latin1(bytes) : new TextDecoder().decode(bytes);
-    return lerRSS(xml, f.nome).slice(0, 25);
+    return lerRSS(xml, f.nome).slice(0, limite);
   }));
   const vistos = new Set(), itens = [];
   for (const l of lotes) {
@@ -464,7 +465,7 @@ async function buscarNoticias(cat) {
       itens.push({ ...n, titulo: n.titulo.slice(0, 200), resumo: n.resumo.slice(0, 240), data: isNaN(t) ? 0 : t });
     }
   }
-  return itens.sort((a, b) => b.data - a.data).slice(0, 120);
+  return itens.sort((a, b) => b.data - a.data).slice(0, cat === "futebol" ? 250 : 120);
 }
 
 const OUTROS_ESPORTES = /v[ôo]lei|superliga|f[óo]rmula 1|\bF1\b|\bGP\b|t[êe]nis|\bWTA\b|\bATP\b|\bNBA\b|basquete|\bNBB\b|\bUFC\b|\bMMA\b|handebol|nata[çc][ãa]o|atletismo|skate|surf|\bNFL\b|golfe|ciclismo|boxe/i;

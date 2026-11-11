@@ -177,6 +177,7 @@
   #noticias-fontes::-webkit-scrollbar { display:none; }
   .chip-fonte { background:var(--bg2); border:1px solid var(--bg3); color:var(--sub); border-radius:20px; padding:5px 12px; font-size:13px; white-space:nowrap; }
   .chip-fonte.ativo { background:var(--azul); border-color:var(--azul); color:#fff; }
+  #sel-time-noticias { padding:6px 8px; font-size:13px; max-width:180px; }
   #noticias-atualizado { font-size:12px; color:var(--sub); white-space:nowrap; }
   #btn-atualizar-noticias { padding:6px 10px; font-size:13px; white-space:nowrap; }
   #noticias-lista { flex:1; overflow-y:auto; padding:10px 16px 20px; display:grid; gap:10px; grid-template-columns:repeat(auto-fill, minmax(340px, 1fr)); align-content:start; }
@@ -235,6 +236,7 @@
     #noticias-lista { grid-template-columns:1fr; padding:8px 10px 20px; }
     #noticias-barra { flex-wrap:wrap; padding:8px 10px; }
     #noticias-fontes { flex-basis:100%; order:-1; }
+    #sel-time-noticias { order:-2; flex-basis:100%; max-width:none; }
     #noticias-atualizado { margin-right:auto; }
     .noticia img { width:96px; height:72px; }
     #estadio-lado { width:100%; position:static; }
@@ -335,6 +337,7 @@
 
     <section id="vista-noticias" class="vista esc">
       <div id="noticias-barra">
+        <select id="sel-time-noticias" class="campo esc" title="Filtrar por time"></select>
         <div id="noticias-fontes"></div>
         <span id="noticias-atualizado"></span>
         <button class="btn sec" id="btn-atualizar-noticias">↻ Atualizar</button>
@@ -1387,6 +1390,7 @@ function receberFutebol(dados) {
   const aoVivo = futebol.jogos.filter((j) => j.estado === "in").length;
   $("item-estadio").textContent = "🏟️ Estádio" + (aoVivo ? ` · 🔴 ${aoVivo}` : "");
   if (vista === "estadio") renderEstadio();
+  if (vista === "noticias-futebol") renderNoticias();
 }
 
 function statusJogo(j) {
@@ -1526,6 +1530,32 @@ function receberNoticias(m) {
 // Atualiza sozinho a cada 5 min enquanto a aba estiver aberta
 setInterval(() => { if (vista.startsWith("noticias") && document.visibilityState === "visible") pedirNoticias(catAtual()); }, 5 * 60e3);
 
+// ---- Filtro por time (nome + apelidos, sem acento) ----
+const APELIDOS = {
+  "flamengo": ["mengao", "mengo"], "palmeiras": ["verdao"], "corinthians": ["timao"],
+  "sao paulo": ["spfc", "tricolor paulista"], "santos": ["peixe", "alvinegro praiano"], "vasco": ["vasco da gama", "cruzmaltino", "gigante da colina"],
+  "fluminense": ["tricolor carioca"], "botafogo": ["fogao", "glorioso"], "atletico-mg": ["atletico mineiro", "galo", "atletico mg"],
+  "cruzeiro": ["raposa", "cabuloso"], "gremio": ["imortal tricolor", "tricolor gaucho"], "internacional": ["inter", "colorado"], "bahia": ["esquadrao", "tricolor baiano"],
+  "vitoria": ["leao da barra"], "fortaleza": ["leao do pici", "tricolor de aco"], "ceara": ["vozao"], "sport": ["sport recife", "leao da ilha"],
+  "bragantino": ["red bull bragantino", "massa bruta", "rb bragantino"], "juventude": ["juventude"], "mirassol": ["leao caipira"], "chapecoense": ["chape"],
+  "athletico-pr": ["athletico paranaense", "furacao", "athletico"], "coritiba": ["coxa"], "goias": ["esmeraldino"], "cuiaba": ["dourado"], "remo": ["leao azul"], "paysandu": ["papao"],
+};
+const semAcento = (t) => String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+const timeNoticias = { id: lerLocal("salinha-time-noticias") ?? (lerLocal("salinha-time") || "") };
+function termosDoTime(nome) {
+  const base = semAcento(nome).replace(/ da gama$/, "");
+  const chave = Object.keys(APELIDOS).find((k) => (" " + base + " ").includes(" " + k + " ") || (" " + k + " ").includes(" " + base + " "));
+  return [...new Set([base, ...(chave ? [chave, ...APELIDOS[chave]] : [])])].filter((t) => t.length >= 3);
+}
+function noticiaDoTime(i, termos) {
+  const texto = " " + semAcento(i.titulo + " " + i.resumo).replace(/[^a-z0-9-]+/g, " ") + " ";
+  const link = semAcento(i.link);
+  return termos.some((t) => texto.includes(" " + t + " ") || link.includes("/" + t.replace(/ /g, "-") + "/"));
+}
+function timesParaFiltro() {
+  return (futebol.tabela || []).map((l) => ({ id: l.id, nome: l.nome })).sort((a, b) => a.nome.localeCompare(b.nome));
+}
+
 function haQuanto(t) {
   if (!t) return "";
   const min = Math.round((Date.now() - t) / 60e3);
@@ -1538,6 +1568,17 @@ function haQuanto(t) {
 
 function renderNoticias() {
   const cat = catAtual(), n = noticias[cat];
+  // seletor de time (só no futebol)
+  const sel = $("sel-time-noticias");
+  sel.classList.toggle("esc", cat !== "futebol");
+  const times = timesParaFiltro();
+  if (sel.options.length !== times.length + 1) {
+    sel.replaceChildren(new Option("⚽ Todos os times", ""));
+    for (const t of times) sel.add(new Option(t.nome, t.id));
+  }
+  sel.value = times.some((t) => t.id === timeNoticias.id) ? timeNoticias.id : "";
+  const timeEsc = cat === "futebol" && times.find((t) => t.id === sel.value);
+  const termos = timeEsc ? termosDoTime(timeEsc.nome) : null;
   // filtro por site
   const fontes = [...new Set(n.itens.map((i) => i.fonte))];
   if (n.fonte && !fontes.includes(n.fonte)) n.fonte = "";
@@ -1552,8 +1593,9 @@ function renderNoticias() {
   $("noticias-atualizado").textContent = n.atualizadoEm ? "Atualizado " + haQuanto(n.atualizadoEm) : "";
 
   const lista = $("noticias-lista"); lista.replaceChildren();
-  const itens = n.itens.filter((i) => !n.fonte || i.fonte === n.fonte);
-  if (!itens.length && n.atualizadoEm) lista.appendChild(Object.assign(document.createElement("div"), { className: "fila-vazia", textContent: "Nenhuma notícia agora. Tente atualizar em instantes." }));
+  const itens = n.itens.filter((i) => (!n.fonte || i.fonte === n.fonte) && (!termos || noticiaDoTime(i, termos)));
+  if (!itens.length && n.atualizadoEm) lista.appendChild(Object.assign(document.createElement("div"), { className: "fila-vazia",
+    textContent: timeEsc ? `Nenhuma notícia recente sobre o ${timeEsc.nome}${n.fonte ? " no " + n.fonte : ""}.` : "Nenhuma notícia agora. Tente atualizar em instantes." }));
   for (const i of itens) {
     const a = document.createElement("a"); a.className = "noticia"; a.href = i.link; a.target = "_blank"; a.rel = "noopener noreferrer";
     if (i.imagem) {
@@ -1580,6 +1622,7 @@ function renderNoticias() {
 
 $("item-noticias").onclick = () => mostrar("noticias");
 $("item-noticias-futebol").onclick = () => mostrar("noticias-futebol");
+$("sel-time-noticias").onchange = (e) => { timeNoticias.id = e.target.value; salvarLocal("salinha-time-noticias", timeNoticias.id); renderNoticias(); };
 $("btn-atualizar-noticias").onclick = () => pedirNoticias(catAtual(), true);
 
 // =================== JOGOS ===================
