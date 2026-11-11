@@ -171,6 +171,25 @@
   body.tremer #app { animation:tremer .35s linear 3; }
   @media (prefers-reduced-motion: reduce) { body.tremer #app, .gol-bola { animation:none; } }
 
+  /* Notícias */
+  #noticias-barra { display:flex; align-items:center; gap:10px; padding:10px 16px; border-bottom:1px solid #0006; }
+  #noticias-fontes { display:flex; gap:6px; overflow-x:auto; flex:1; scrollbar-width:none; }
+  #noticias-fontes::-webkit-scrollbar { display:none; }
+  .chip-fonte { background:var(--bg2); border:1px solid var(--bg3); color:var(--sub); border-radius:20px; padding:5px 12px; font-size:13px; white-space:nowrap; }
+  .chip-fonte.ativo { background:var(--azul); border-color:var(--azul); color:#fff; }
+  #noticias-atualizado { font-size:12px; color:var(--sub); white-space:nowrap; }
+  #btn-atualizar-noticias { padding:6px 10px; font-size:13px; white-space:nowrap; }
+  #noticias-lista { flex:1; overflow-y:auto; padding:10px 16px 20px; display:grid; gap:10px; grid-template-columns:repeat(auto-fill, minmax(340px, 1fr)); align-content:start; }
+  .noticia { position:relative; display:flex; gap:12px; background:var(--bg2); border-radius:12px; padding:10px; color:var(--txt); text-decoration:none; border:1px solid transparent; }
+  .noticia:hover { border-color:var(--bg3); background:#2a2c33; }
+  .noticia img { width:120px; height:84px; object-fit:cover; border-radius:8px; flex-shrink:0; background:var(--bg0); }
+  .noticia-corpo { flex:1; min-width:0; padding-right:22px; }
+  .noticia-meta { font-size:11px; color:var(--sub); font-weight:700; text-transform:uppercase; letter-spacing:.02em; }
+  .noticia-titulo { font-weight:700; line-height:1.3; margin-top:3px; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+  .noticia-resumo { font-size:13px; color:var(--sub); margin-top:4px; line-height:1.35; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  .noticia-share { position:absolute; top:6px; right:6px; background:none; border:none; font-size:15px; opacity:.55; padding:2px; }
+  .noticia-share:hover { opacity:1; }
+
   /* Assistir junto */
   #form-link { display:flex; gap:8px; padding:12px 16px; border-bottom:1px solid #0006; flex-wrap:wrap; }
   #campo-link { flex:1; min-width:200px; }
@@ -213,6 +232,11 @@
   @media (max-width: 800px) {
     #assistir-corpo { flex-direction:column; }
     #estadio-corpo { flex-direction:column; padding:8px 10px 16px; }
+    #noticias-lista { grid-template-columns:1fr; padding:8px 10px 20px; }
+    #noticias-barra { flex-wrap:wrap; padding:8px 10px; }
+    #noticias-fontes { flex-basis:100%; order:-1; }
+    #noticias-atualizado { margin-right:auto; }
+    .noticia img { width:96px; height:72px; }
     #estadio-lado { width:100%; position:static; }
     #estadio-jogos { width:100%; }
     #estadio-atualizado { margin-left:0; width:100%; }
@@ -249,7 +273,9 @@
     <div style="padding:0 8px"><button class="item" id="item-voz">🔊 Sala de voz</button></div>
     <div id="lista-voz-sidebar"></div>
     <div class="secao">Futebol</div>
-    <div style="padding:0 8px"><button class="item" id="item-estadio">🏟️ Estádio</button></div>
+    <div style="padding:0 8px"><button class="item" id="item-estadio">🏟️ Estádio</button><button class="item" id="item-noticias-futebol">⚽ Notícias do futebol</button></div>
+    <div class="secao">Notícias</div>
+    <div style="padding:0 8px"><button class="item" id="item-noticias">📰 Notícias</button></div>
     <div class="secao">Assistir</div>
     <div style="padding:0 8px"><button class="item" id="item-assistir">📺 Assistir junto</button></div>
     <div class="secao">Jogos</div>
@@ -305,6 +331,15 @@
           <div id="legenda-tabela"><span class="lg g4"></span> G4 <span class="lg z4"></span> Z4</div>
         </div>
       </div>
+    </section>
+
+    <section id="vista-noticias" class="vista esc">
+      <div id="noticias-barra">
+        <div id="noticias-fontes"></div>
+        <span id="noticias-atualizado"></span>
+        <button class="btn sec" id="btn-atualizar-noticias">↻ Atualizar</button>
+      </div>
+      <div id="noticias-lista"></div>
     </section>
 
     <section id="vista-assistir" class="vista esc">
@@ -452,6 +487,7 @@ function tratar(m) {
     case "assistir": receberAssistir(m.estado, m.agora); break;
     case "futebol": receberFutebol(m.dados); break;
     case "gol": receberGol(m); break;
+    case "noticias": receberNoticias(m); break;
     case "jogo":
       if (jogoAtual && m.jogo === jogoAtual.id) $("quadro-jogo").contentWindow?.postMessage({ salinha: true, tipo: "recebido", de: m.de, nome: m.nome, dados: m.dados }, "*");
       break;
@@ -461,13 +497,16 @@ function tratar(m) {
 // =================== NAVEGAÇÃO ===================
 function mostrar(qual) {
   vista = qual;
-  for (const v of ["texto", "voz", "estadio", "assistir", "jogos"]) $("vista-" + v).classList.toggle("esc", v !== qual);
+  for (const v of ["texto", "voz", "estadio", "noticias", "assistir", "jogos"]) $("vista-" + v).classList.toggle("esc", v !== (qual.startsWith("noticias") ? "noticias" : qual));
   $("item-voz").classList.toggle("ativo", qual === "voz");
   $("item-jogos").classList.toggle("ativo", qual === "jogos");
   $("item-assistir").classList.toggle("ativo", qual === "assistir");
   $("item-estadio").classList.toggle("ativo", qual === "estadio");
+  $("item-noticias").classList.toggle("ativo", qual === "noticias");
+  $("item-noticias-futebol").classList.toggle("ativo", qual === "noticias-futebol");
+  if (qual.startsWith("noticias")) { renderNoticias(); const n = noticias[catAtual()]; if (Date.now() - n.atualizadoEm > 5 * 60e3) pedirNoticias(catAtual()); }
   if (qual === "estadio") renderEstadio();
-  $("titulo").textContent = qual === "texto" ? "# " + canalAtual : qual === "voz" ? "🔊 Sala de voz" : qual === "assistir" ? "📺 Assistir junto" : qual === "estadio" ? "🏟️ Estádio — Brasileirão" : "🎮 Jogos" + (jogoAtual ? " — " + jogoAtual.nome : "");
+  $("titulo").textContent = qual === "texto" ? "# " + canalAtual : qual === "voz" ? "🔊 Sala de voz" : qual === "assistir" ? "📺 Assistir junto" : qual === "estadio" ? "🏟️ Estádio — Brasileirão" : qual === "noticias" ? "📰 Notícias" : qual === "noticias-futebol" ? "⚽ Notícias do futebol" : "🎮 Jogos" + (jogoAtual ? " — " + jogoAtual.nome : "");
   if (qual === "texto") { naoLidas[canalAtual] = 0; renderMensagens(); }
   renderCanais();
   $("lateral").classList.remove("aberto");
@@ -1467,6 +1506,81 @@ $("sel-time").onchange = (e) => { prefFut.time = e.target.value; salvarLocal("sa
 $("sel-avisos").onchange = (e) => { prefFut.avisos = e.target.value; salvarLocal("salinha-avisos-gol", prefFut.avisos); };
 $("btn-som-gol").onclick = () => { prefFut.som = !prefFut.som; salvarLocal("salinha-som-gol", prefFut.som ? "sim" : "nao"); renderEstadio(); if (prefFut.som) somTorcida(0.5); };
 $("gol-aviso").onclick = () => { $("gol-aviso").classList.add("esc"); mostrar("estadio"); };
+
+// =================== NOTÍCIAS (geral e futebol) ===================
+const noticias = { geral: { itens: [], atualizadoEm: 0, fonte: "" }, futebol: { itens: [], atualizadoEm: 0, fonte: "" } };
+let pedidoNoticias = {};
+
+function catAtual() { return vista === "noticias-futebol" ? "futebol" : "geral"; }
+function pedirNoticias(cat, forcar) {
+  if (pedidoNoticias[cat] && Date.now() - pedidoNoticias[cat] < 4000) return;
+  pedidoNoticias[cat] = Date.now();
+  if (!noticias[cat].itens.length) $("noticias-lista").replaceChildren(Object.assign(document.createElement("div"), { className: "fila-vazia", textContent: "Buscando as notícias…" }));
+  enviar({ t: "noticias", cat, forcar });
+}
+function receberNoticias(m) {
+  const n = noticias[m.cat]; n.itens = m.itens || []; n.atualizadoEm = m.atualizadoEm || 0;
+  pedidoNoticias[m.cat] = 0;
+  if (catAtual() === m.cat && vista.startsWith("noticias")) renderNoticias();
+}
+// Atualiza sozinho a cada 5 min enquanto a aba estiver aberta
+setInterval(() => { if (vista.startsWith("noticias") && document.visibilityState === "visible") pedirNoticias(catAtual()); }, 5 * 60e3);
+
+function haQuanto(t) {
+  if (!t) return "";
+  const min = Math.round((Date.now() - t) / 60e3);
+  if (min < 1) return "agora";
+  if (min < 60) return `há ${min} min`;
+  const h = Math.round(min / 60);
+  if (h < 24) return `há ${h} h`;
+  return new Date(t).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+}
+
+function renderNoticias() {
+  const cat = catAtual(), n = noticias[cat];
+  // filtro por site
+  const fontes = [...new Set(n.itens.map((i) => i.fonte))];
+  if (n.fonte && !fontes.includes(n.fonte)) n.fonte = "";
+  const chips = $("noticias-fontes"); chips.replaceChildren();
+  for (const f of ["", ...fontes]) {
+    const b = document.createElement("button");
+    b.className = "chip-fonte" + (n.fonte === f ? " ativo" : "");
+    b.textContent = f || "Todas";
+    b.onclick = () => { n.fonte = f; renderNoticias(); };
+    chips.appendChild(b);
+  }
+  $("noticias-atualizado").textContent = n.atualizadoEm ? "Atualizado " + haQuanto(n.atualizadoEm) : "";
+
+  const lista = $("noticias-lista"); lista.replaceChildren();
+  const itens = n.itens.filter((i) => !n.fonte || i.fonte === n.fonte);
+  if (!itens.length && n.atualizadoEm) lista.appendChild(Object.assign(document.createElement("div"), { className: "fila-vazia", textContent: "Nenhuma notícia agora. Tente atualizar em instantes." }));
+  for (const i of itens) {
+    const a = document.createElement("a"); a.className = "noticia"; a.href = i.link; a.target = "_blank"; a.rel = "noopener noreferrer";
+    if (i.imagem) {
+      const img = document.createElement("img"); img.src = i.imagem; img.alt = ""; img.loading = "lazy"; img.referrerPolicy = "no-referrer";
+      img.onerror = () => img.remove();
+      a.appendChild(img);
+    }
+    const corpo = document.createElement("div"); corpo.className = "noticia-corpo";
+    const meta = document.createElement("div"); meta.className = "noticia-meta"; meta.textContent = i.fonte + (i.data ? " · " + haQuanto(i.data) : "");
+    const t = document.createElement("div"); t.className = "noticia-titulo"; t.textContent = i.titulo;
+    corpo.append(meta, t);
+    if (i.resumo) { const r = document.createElement("div"); r.className = "noticia-resumo"; r.textContent = i.resumo; corpo.appendChild(r); }
+    const share = document.createElement("button"); share.className = "noticia-share"; share.title = "Mandar no chat"; share.textContent = "💬";
+    share.onclick = (e) => {
+      e.preventDefault(); e.stopPropagation();
+      const canal = cat === "futebol" && canais.includes("futebol") ? "futebol" : "geral";
+      enviar({ t: "msg", canal, texto: `📰 ${i.titulo}\n${i.link}` });
+      share.textContent = "✅"; setTimeout(() => (share.textContent = "💬"), 1500);
+    };
+    a.append(corpo, share);
+    lista.appendChild(a);
+  }
+}
+
+$("item-noticias").onclick = () => mostrar("noticias");
+$("item-noticias-futebol").onclick = () => mostrar("noticias-futebol");
+$("btn-atualizar-noticias").onclick = () => pedirNoticias(catAtual(), true);
 
 // =================== JOGOS ===================
 function renderJogos() {

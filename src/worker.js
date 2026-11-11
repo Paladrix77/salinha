@@ -147,6 +147,12 @@ export class Sala extends DurableObject {
       case "assistir":
         await this.acaoAssistir(m, eu);
         break;
+      case "noticias": {
+        const cat = m.cat === "futebol" ? "futebol" : "geral";
+        const dados = await this.noticias(cat, !!m.forcar);
+        this.enviar(ws, { t: "noticias", cat, ...dados });
+        break;
+      }
       case "assistindo": // quem está com a sessão do "Assistir junto" aberta
         eu.assistindo = !!m.ativo;
         ws.serializeAttachment(eu);
@@ -218,6 +224,23 @@ export class Sala extends DurableObject {
       this.salvarETransmitir("futebol", NOME_BOT, ev.texto, true);
       if (ev.tipo === "gol") this.transmitir({ t: "gol", ...ev });
     }
+  }
+
+  // ---------- Notícias (feeds dos sites) ----------
+  async noticias(cat, forcar) {
+    this.cacheNoticias ||= {};
+    let c = this.cacheNoticias[cat] || (this.cacheNoticias[cat] = (await this.ctx.storage.get("noticias-" + cat)) || { itens: [], atualizadoEm: 0 });
+    const idade = Date.now() - c.atualizadoEm;
+    if (idade > 10 * 60e3 || (forcar && idade > 60e3)) {
+      this.buscandoNoticias ||= {};
+      this.buscandoNoticias[cat] ||= buscarNoticias(cat).finally(() => { this.buscandoNoticias[cat] = null; });
+      const itens = await this.buscandoNoticias[cat];
+      if (itens.length) {
+        c = this.cacheNoticias[cat] = { itens, atualizadoEm: Date.now() };
+        await this.ctx.storage.put("noticias-" + cat, c);
+      }
+    }
+    return c;
   }
 
   // ---------- Assistir junto ----------
@@ -388,4 +411,87 @@ function resumirTabela(t) {
       pos: s.rank || 0, pts: s.points || 0, j: s.gamesPlayed || 0, v: s.wins || 0, e: s.ties || 0, d: s.losses || 0, sg: s.pointDifferential || 0,
     };
   }).sort((a, b) => a.pos - b.pos);
+}
+
+// ---------- helpers das notícias ----------
+const FONTES = {
+  futebol: [
+    { nome: "ge", url: "https://ge.globo.com/rss/ge/futebol/" },
+    { nome: "ESPN", url: "https://site.api.espn.com/apis/site/v2/sports/soccer/bra.1/news?lang=pt&region=br&limit=30", json: "espn" },
+    { nome: "Gazeta Esportiva", url: "https://www.gazetaesportiva.com/feed/" },
+    { nome: "Estadão", url: "https://www.estadao.com.br/arc/outboundfeeds/feeds/rss/sections/esportes/futebol/" },
+    { nome: "Folha", url: "https://feeds.folha.uol.com.br/esporte/rss091.xml" },
+    { nome: "Agência Brasil", url: "https://agenciabrasil.ebc.com.br/rss/esportes/feed.xml" },
+  ],
+  geral: [
+    { nome: "g1", url: "https://g1.globo.com/rss/g1/" },
+    { nome: "BBC Brasil", url: "https://feeds.bbci.co.uk/portuguese/rss.xml" },
+    { nome: "CNN Brasil", url: "https://www.cnnbrasil.com.br/feed/" },
+    { nome: "Folha", url: "https://feeds.folha.uol.com.br/emcimadahora/rss091.xml" },
+    { nome: "Agência Brasil", url: "https://agenciabrasil.ebc.com.br/rss/ultimasnoticias/feed.xml" },
+    { nome: "Poder360", url: "https://www.poder360.com.br/feed/" },
+    { nome: "Metrópoles", url: "https://www.metropoles.com/feed" },
+  ],
+};
+
+async function buscarNoticias(cat) {
+  const lotes = await Promise.allSettled(FONTES[cat].map(async (f) => {
+    const r = await fetch(f.url, { headers: { "user-agent": "Mozilla/5.0 (Salinha)" }, signal: AbortSignal.timeout(8000) });
+    if (!r.ok) throw new Error(f.nome + " HTTP " + r.status);
+    if (f.json === "espn") {
+      const j = await r.json();
+      return (j.articles || []).slice(0, 25).map((a) => ({
+        titulo: a.headline || "", link: a.links?.web?.href || "", resumo: a.description || "",
+        imagem: a.images?.[0]?.url || "", data: a.published || "", fonte: f.nome,
+      }));
+    }
+    const bytes = new Uint8Array(await r.arrayBuffer());
+    const cabeca = new TextDecoder("latin1").decode(bytes.slice(0, 200)) + (r.headers.get("content-type") || "");
+    const xml = /iso-8859-1|windows-1252/i.test(cabeca) ? latin1(bytes) : new TextDecoder().decode(bytes);
+    return lerRSS(xml, f.nome).slice(0, 25);
+  }));
+  const vistos = new Set(), itens = [];
+  for (const l of lotes) {
+    if (l.status !== "fulfilled") { console.log("notícias:", l.reason?.message); continue; }
+    for (const n of l.value) {
+      if (!n.titulo || !/^https?:\/\//.test(n.link)) continue;
+      const chave = n.titulo.toLowerCase().replace(/[^a-z0-9à-ú]/g, "").slice(0, 60);
+      if (vistos.has(chave) || vistos.has(n.link)) continue;
+      vistos.add(chave); vistos.add(n.link);
+      const t = Date.parse(n.data);
+      itens.push({ ...n, titulo: n.titulo.slice(0, 200), resumo: n.resumo.slice(0, 240), data: isNaN(t) ? 0 : t });
+    }
+  }
+  return itens.sort((a, b) => b.data - a.data).slice(0, 120);
+}
+
+function latin1(bytes) {
+  let s = ""; for (let i = 0; i < bytes.length; i += 8192) s += String.fromCharCode(...bytes.subarray(i, i + 8192));
+  return s;
+}
+function textoLimpo(t) {
+  return String(t || "")
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ").replace(/&quot;/g, '"').replace(/&#0?39;|&apos;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+    .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(+n)).replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCodePoint(parseInt(n, 16)))
+    .replace(/&amp;/g, "&").replace(/\s+/g, " ").trim();
+}
+function lerRSS(xml, fonte) {
+  const itens = [];
+  for (const [, it] of xml.matchAll(/<item[\s>]([\s\S]*?)<\/item>/g)) {
+    const tag = (n) => { const m = it.match(new RegExp("<" + n + "(?:\\s[^>]*)?>([\\s\\S]*?)</" + n + ">")); return m ? m[1] : ""; };
+    const bruto = tag("description") + tag("content:encoded");
+    const img = it.match(/<media:(?:content|thumbnail)[^>]*url="([^"]+)"/)?.[1]
+      || it.match(/<enclosure[^>]*url="([^"]+)"[^>]*type="image/)?.[1]
+      || bruto.match(/<img[^>]*src=["']([^"']+)["']/)?.[1]
+      || textoLimpo(bruto).match(/https?:\/\/\S+\.(?:jpe?g|png|webp)/i)?.[0] || "";
+    let resumo = textoLimpo(tag("atom:subtitle")) || textoLimpo(tag("description"));
+    if (resumo.length > 240) resumo = resumo.slice(0, 237).replace(/\s\S*$/, "") + "…";
+    itens.push({
+      titulo: textoLimpo(tag("title")), link: textoLimpo(tag("link")) || textoLimpo(tag("guid")),
+      resumo, imagem: img.replace(/&amp;/g, "&"), data: textoLimpo(tag("pubDate")) || textoLimpo(tag("dc:date")), fonte,
+    });
+  }
+  return itens;
 }

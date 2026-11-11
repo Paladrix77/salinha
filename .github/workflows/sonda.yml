@@ -7,33 +7,19 @@ jobs:
   sonda:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with: { node-version: 22 }
       - run: |
-          set +e
-          for U in \
-            https://g1.globo.com/rss/g1/ \
-            https://ge.globo.com/rss/ge/futebol/ \
-            https://ge.globo.com/rss/ge/ \
-            https://rss.uol.com.br/feed/noticias.xml \
-            https://feeds.folha.uol.com.br/emcimadahora/rss091.xml \
-            https://feeds.folha.uol.com.br/esporte/rss091.xml \
-            https://feeds.bbci.co.uk/portuguese/rss.xml \
-            https://www.cnnbrasil.com.br/feed/ \
-            https://www.cnnbrasil.com.br/esportes/feed/ \
-            https://agenciabrasil.ebc.com.br/rss/ultimasnoticias/feed.xml \
-            https://agenciabrasil.ebc.com.br/rss/esportes/feed.xml \
-            https://www.lance.com.br/feed \
-            https://www.gazetaesportiva.com/feed/ \
-            https://www.estadao.com.br/arc/outboundfeeds/feeds/rss/sections/esportes/futebol/ \
-            "https://site.api.espn.com/apis/site/v2/sports/soccer/bra.1/news?lang=pt&region=br&limit=5" \
-            https://www.metropoles.com/feed \
-            https://www.poder360.com.br/feed/ ; do
-            curl -sL --compressed -A "Mozilla/5.0 (Salinha)" -o o.txt -w "%{http_code} %{content_type} %{size_download}" "$U" > h.txt
-            n=$(grep -o "<item" o.txt | wc -l); img=$(grep -oE "media:content|media:thumbnail|<enclosure|<img" o.txt | sort | uniq -c | tr '\n' ' ')
-            enc=$(head -c 120 o.txt | grep -oi 'encoding="[^"]*"')
-            t=$(grep -o "<item.*" o.txt | head -1 | grep -oE "<title>[^<]{0,80}|CDATA\[[^]]{0,80}" | head -1)
-            echo "## $(cat h.txt) itens=$n $enc img=[$img] | $U"
-            echo "   $t"
-          done
-          echo "== ESPN news json"; curl -s --compressed "https://site.api.espn.com/apis/site/v2/sports/soccer/bra.1/news?lang=pt&region=br&limit=3" | jq -c '.articles[0:2][] | {headline, description, published, img: .images[0].url, link: .links.web.href}' 2>&1 | cut -c1-400
-          echo "== item g1"; curl -sL --compressed "https://g1.globo.com/rss/g1/" | grep -o "<item>.*" | head -c 1500; echo
-          echo "== item ge"; curl -sL --compressed "https://ge.globo.com/rss/ge/futebol/" | tr -d '\n' | grep -o "<item>.\{0,1500\}" | head -1; echo
+          sed 's/import { DurableObject } from "cloudflare:workers";/class DurableObject{}/; s#from "./bots.js"#from "./src/bots.js"#' src/worker.js > w.mjs
+          echo 'export { buscarNoticias };' >> w.mjs
+          node -e '
+            import("./w.mjs").then(async ({ buscarNoticias }) => {
+              for (const cat of ["futebol", "geral"]) {
+                const itens = await buscarNoticias(cat);
+                const por = {}; for (const i of itens) { por[i.fonte] ??= { n: 0, img: 0, resumo: 0, data: 0 }; const p = por[i.fonte]; p.n++; if (i.imagem) p.img++; if (i.resumo) p.resumo++; if (i.data) p.data++; }
+                console.log("=== " + cat + ": " + itens.length + " notícias"); console.table(por);
+                for (const i of itens.slice(0, 4)) console.log(JSON.stringify({ ...i, resumo: i.resumo.slice(0, 80) }));
+                const ruim = itens.filter((i) => /&[a-z#0-9]+;|<|�|Ã£|Ã©/.test(i.titulo + i.resumo)); console.log("com caractere estranho:", ruim.length, ruim.slice(0, 2).map((i) => i.fonte + ": " + i.titulo));
+              }
+            });'
