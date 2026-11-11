@@ -455,6 +455,8 @@ async function buscarNoticias(cat) {
     if (l.status !== "fulfilled") { console.log("notícias:", l.reason?.message); continue; }
     for (const n of l.value) {
       if (!n.titulo || !/^https?:\/\//.test(n.link)) continue;
+      if (cat === "futebol" && OUTROS_ESPORTES.test(n.titulo) && !/futebol/i.test(n.titulo)) continue;
+      if (n.imagem && !imagemBoa(n.imagem)) n.imagem = "";
       const chave = n.titulo.toLowerCase().replace(/[^a-z0-9à-ú]/g, "").slice(0, 60);
       if (vistos.has(chave) || vistos.has(n.link)) continue;
       vistos.add(chave); vistos.add(n.link);
@@ -465,6 +467,8 @@ async function buscarNoticias(cat) {
   return itens.sort((a, b) => b.data - a.data).slice(0, 120);
 }
 
+const OUTROS_ESPORTES = /v[ôo]lei|superliga|f[óo]rmula 1|\bF1\b|\bGP\b|t[êe]nis|\bWTA\b|\bATP\b|\bNBA\b|basquete|\bNBB\b|\bUFC\b|\bMMA\b|handebol|nata[çc][ãa]o|atletismo|skate|surf|\bNFL\b|golfe|ciclismo|boxe/i;
+function imagemBoa(u) { return !!u && /^https?:/.test(u) && !/s\.w\.org\/images\/core\/emoji|gravatar|\/emoji\/|1x1|pixel|feedburner/i.test(u); }
 function latin1(bytes) {
   let s = ""; for (let i = 0; i < bytes.length; i += 8192) s += String.fromCharCode(...bytes.subarray(i, i + 8192));
   return s;
@@ -475,16 +479,18 @@ function textoLimpo(t) {
     .replace(/<[^>]+>/g, " ")
     .replace(/&nbsp;/g, " ").replace(/&quot;/g, '"').replace(/&#0?39;|&apos;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
     .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(+n)).replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCodePoint(parseInt(n, 16)))
-    .replace(/&amp;/g, "&").replace(/\s+/g, " ").trim();
+    .replace(/&amp;/g, "&")
+    .replace(/<[^>]+>/g, " ") // tags que vieram "escapadas" (&lt;a&gt;) e só aparecem depois de decodificar
+    .replace(/\s+/g, " ").trim();
 }
 function lerRSS(xml, fonte) {
   const itens = [];
   for (const [, it] of xml.matchAll(/<item[\s>]([\s\S]*?)<\/item>/g)) {
     const tag = (n) => { const m = it.match(new RegExp("<" + n + "(?:\\s[^>]*)?>([\\s\\S]*?)</" + n + ">")); return m ? m[1] : ""; };
     const bruto = tag("description") + tag("content:encoded");
-    const img = it.match(/<media:(?:content|thumbnail)[^>]*url="([^"]+)"/)?.[1]
+    const img = [...it.matchAll(/<media:(?:content|thumbnail)[^>]*url="([^"]+)"/g)].map((x) => x[1]).find(imagemBoa)
       || it.match(/<enclosure[^>]*url="([^"]+)"[^>]*type="image/)?.[1]
-      || bruto.match(/<img[^>]*src=["']([^"']+)["']/)?.[1]
+      || [...bruto.matchAll(/<img[^>]*src=["']([^"']+)["']/g)].map((x) => x[1]).find(imagemBoa)
       || textoLimpo(bruto).match(/https?:\/\/\S+\.(?:jpe?g|png|webp)/i)?.[0] || "";
     let resumo = textoLimpo(tag("atom:subtitle")) || textoLimpo(tag("description"));
     if (resumo.length > 240) resumo = resumo.slice(0, 237).replace(/\s\S*$/, "") + "…";

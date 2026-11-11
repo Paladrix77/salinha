@@ -20,6 +20,7 @@ jobs:
                 const por = {}; for (const i of itens) { por[i.fonte] ??= { n: 0, img: 0, resumo: 0, data: 0 }; const p = por[i.fonte]; p.n++; if (i.imagem) p.img++; if (i.resumo) p.resumo++; if (i.data) p.data++; }
                 console.log("=== " + cat + ": " + itens.length + " notícias"); console.table(por);
                 for (const i of itens.slice(0, 4)) console.log(JSON.stringify({ ...i, resumo: i.resumo.slice(0, 80) }));
-                const ruim = itens.filter((i) => /&[a-z#0-9]+;|<|�|Ã£|Ã©/.test(i.titulo + i.resumo)); console.log("com caractere estranho:", ruim.length, ruim.slice(0, 2).map((i) => i.fonte + ": " + i.titulo));
+                const ruim = itens.filter((i) => /&[a-z#0-9]+;|<|�|Ã£|Ã©/.test(i.titulo + i.resumo)); console.log("com caractere estranho:", ruim.length, ruim.slice(0, 3).map((i) => i.fonte + ": " + i.resumo.slice(0,120))); console.log("emoji:", itens.filter((i) => /emoji/.test(i.imagem)).length, "| outros esportes:", itens.filter((i) => /v[ôo]lei|F1|WTA|Superliga/i.test(i.titulo)).map((i) => i.titulo).slice(0,3));
               }
             });'
+# r2
