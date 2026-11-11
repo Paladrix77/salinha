@@ -32,6 +32,11 @@ jobs:
         working-directory: app
         run: npm install --no-audit --no-fund
 
+      - name: Oficial (main) abre a Salinha oficial; teste (dev) abre a de testes
+        if: github.ref_name == 'main'
+        working-directory: app
+        run: node -e "const fs=require('fs'),f='capacitor.config.json',c=JSON.parse(fs.readFileSync(f));c.server.url='https://salinha.p4ladino777.workers.dev';fs.writeFileSync(f,JSON.stringify(c,null,2));console.log(c.server.url)"
+
       - name: Criar projeto Android
         working-directory: app
         run: |
@@ -39,6 +44,13 @@ jobs:
           npx @capacitor/assets generate --android --iconBackgroundColor '#5865f2' --splashBackgroundColor '#16171b' || echo "ícones: usando os padrão"
           node preparar-android.mjs
           npx cap sync android
+          if [ "${{ github.ref_name }}" != "main" ]; then
+            # App de teste separado do oficial (dá pra ter os dois instalados)
+            sed -i 's/applicationId "com.salinha.app"/applicationId "com.salinha.app.teste"/' android/app/build.gradle
+            sed -i 's#<string name="app_name">Salinha</string>#<string name="app_name">Salinha Teste</string>#; s#<string name="title_activity_main">Salinha</string>#<string name="title_activity_main">Salinha Teste</string>#' android/app/src/main/res/values/strings.xml
+          fi
+          grep applicationId android/app/build.gradle
+          grep app_name android/app/src/main/res/values/strings.xml
 
       - name: Mesma assinatura em todo APK (atualiza sem desinstalar)
         run: |
@@ -64,4 +76,4 @@ jobs:
           name: "Salinha ${{ github.ref_name == 'main' && 'oficial' || 'teste' }} — versão ${{ github.run_number }}"
           body: "Baixe o arquivo .apk abaixo pelo celular e instale. (Gerado automaticamente.)"
           files: Salinha-${{ github.ref_name }}.apk
-          make_latest: true
+          make_latest: ${{ github.ref_name == 'main' }}
