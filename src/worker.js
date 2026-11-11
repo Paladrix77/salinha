@@ -147,17 +147,6 @@ export class Sala extends DurableObject {
       case "assistir":
         await this.acaoAssistir(m, eu);
         break;
-      case "pos": { // Sala 2D: posição do boneco
-        if (m.sair) { delete eu.pos; ws.serializeAttachment(eu); this.avisarUsuarios(); break; }
-        const x = Number(m.x), y = Number(m.y);
-        if (!isFinite(x) || !isFinite(y)) return;
-        const novo = !eu.pos;
-        eu.pos = { x: Math.round(Math.max(0, Math.min(1600, x))), y: Math.round(Math.max(0, Math.min(1000, y))) };
-        ws.serializeAttachment(eu);
-        if (novo) this.avisarUsuarios();
-        else this.transmitir({ t: "pos", id: eu.id, x: eu.pos.x, y: eu.pos.y }, ws);
-        break;
-      }
       case "assistindo": // quem está com a sessão do "Assistir junto" aberta
         eu.assistindo = !!m.ativo;
         ws.serializeAttachment(eu);

@@ -171,18 +171,6 @@
   body.tremer #app { animation:tremer .35s linear 3; }
   @media (prefers-reduced-motion: reduce) { body.tremer #app, .gol-bola { animation:none; } }
 
-  /* Sala 2D */
-  #mapa-entrar { text-align:center; padding:40px 16px; color:var(--sub); }
-  #mapa-entrar h3 { color:var(--txt); margin:0 0 8px; font-size:22px; }
-  #mapa-area { flex:1; position:relative; min-height:0; overflow:hidden; }
-  #mapa { position:absolute; inset:0; width:100%; height:100%; touch-action:none; cursor:pointer; }
-  #mapa-topo { position:absolute; top:10px; left:10px; right:10px; display:flex; align-items:center; justify-content:space-between; gap:10px; pointer-events:none; }
-  #mapa-topo > * { pointer-events:auto; }
-  #mapa-info { background:#000a; padding:6px 10px; border-radius:8px; font-size:13px; }
-  #btn-sair-mapa { padding:6px 10px; font-size:13px; }
-  #mapa-acao { position:absolute; bottom:44px; left:50%; transform:translateX(-50%); box-shadow:0 6px 20px #0008; }
-  #mapa-dica { position:absolute; bottom:10px; left:0; right:0; text-align:center; font-size:12px; color:var(--sub); pointer-events:none; }
-
   /* Assistir junto */
   #form-link { display:flex; gap:8px; padding:12px 16px; border-bottom:1px solid #0006; flex-wrap:wrap; }
   #campo-link { flex:1; min-width:200px; }
@@ -262,8 +250,6 @@
     <div id="lista-voz-sidebar"></div>
     <div class="secao">Futebol</div>
     <div style="padding:0 8px"><button class="item" id="item-estadio">🏟️ Estádio</button></div>
-    <div class="secao">Sala</div>
-    <div style="padding:0 8px"><button class="item" id="item-mapa">🗺️ Sala 2D</button></div>
     <div class="secao">Assistir</div>
     <div style="padding:0 8px"><button class="item" id="item-assistir">📺 Assistir junto</button></div>
     <div class="secao">Jogos</div>
@@ -318,21 +304,6 @@
           <table id="tabela-br"><thead><tr><th></th><th></th><th title="Pontos">P</th><th title="Jogos">J</th><th title="Vitórias">V</th><th title="Empates">E</th><th title="Derrotas">D</th><th title="Saldo de gols">SG</th></tr></thead><tbody id="estadio-tabela"></tbody></table>
           <div id="legenda-tabela"><span class="lg g4"></span> G4 <span class="lg z4"></span> Z4</div>
         </div>
-      </div>
-    </section>
-
-    <section id="vista-mapa" class="vista esc">
-      <div id="mapa-entrar">
-        <h3>🗺️ Sala 2D</h3>
-        <p>Ande pela sala com seu boneco. Na call, você só ouve quem está perto.<br>O sofá abre o Assistir junto e a mesa abre os Jogos.</p>
-        <p id="mapa-entrar-quem"></p>
-        <button class="btn" id="btn-entrar-mapa">🚶 Entrar na sala</button>
-      </div>
-      <div id="mapa-area" class="esc">
-        <canvas id="mapa"></canvas>
-        <div id="mapa-topo"><span id="mapa-info"></span><button class="btn sec" id="btn-sair-mapa">Sair da sala</button></div>
-        <button class="btn esc" id="mapa-acao"></button>
-        <div id="mapa-dica">Clique ou toque pra andar · no PC também WASD ou setas</div>
       </div>
     </section>
 
@@ -463,13 +434,12 @@ function tratar(m) {
       $("eu-nome").textContent = "👤 " + eu.nome; $("eu-nome").dataset.fala = eu.id;
       renderCanais(); renderMensagens(); receberAssistir(m.assistir, m.agora); receberFutebol(m.futebol);
       if (participando) enviar({ t: "assistindo", ativo: true });
-      if (minhaPos) enviarPos(true);
       if (conectadoAntes) adicionarSistema("Reconectado!");
       conectadoAntes = true;
       break;
     case "usuarios":
       usuarios = m.lista;
-      renderMembros(); renderVozSidebar(); sincronizarPeers(); sincronizarMapa(); aplicarVolumes(); atualizarBlocos(); infoParaJogo(); renderAssistindo();
+      renderMembros(); renderVozSidebar(); sincronizarPeers(); aplicarVolumes(); atualizarBlocos(); infoParaJogo(); renderAssistindo();
       break;
     case "msg":
       (historico[m.canal] ||= []).push(m);
@@ -480,7 +450,6 @@ function tratar(m) {
     case "sistema": adicionarSistema(m.texto); break;
     case "sinal": tratarSinal(m.de, m.dados); break;
     case "assistir": receberAssistir(m.estado, m.agora); break;
-    case "pos": receberPos(m); break;
     case "futebol": receberFutebol(m.dados); break;
     case "gol": receberGol(m); break;
     case "jogo":
@@ -492,15 +461,13 @@ function tratar(m) {
 // =================== NAVEGAÇÃO ===================
 function mostrar(qual) {
   vista = qual;
-  for (const v of ["texto", "voz", "estadio", "mapa", "assistir", "jogos"]) $("vista-" + v).classList.toggle("esc", v !== qual);
+  for (const v of ["texto", "voz", "estadio", "assistir", "jogos"]) $("vista-" + v).classList.toggle("esc", v !== qual);
   $("item-voz").classList.toggle("ativo", qual === "voz");
   $("item-jogos").classList.toggle("ativo", qual === "jogos");
   $("item-assistir").classList.toggle("ativo", qual === "assistir");
-  $("item-mapa").classList.toggle("ativo", qual === "mapa");
   $("item-estadio").classList.toggle("ativo", qual === "estadio");
   if (qual === "estadio") renderEstadio();
-  if (qual === "mapa") { renderMapaUI(); iniciarLoopMapa(); }
-  $("titulo").textContent = qual === "texto" ? "# " + canalAtual : qual === "voz" ? "🔊 Sala de voz" : qual === "assistir" ? "📺 Assistir junto" : qual === "mapa" ? "🗺️ Sala 2D" : qual === "estadio" ? "🏟️ Estádio — Brasileirão" : "🎮 Jogos" + (jogoAtual ? " — " + jogoAtual.nome : "");
+  $("titulo").textContent = qual === "texto" ? "# " + canalAtual : qual === "voz" ? "🔊 Sala de voz" : qual === "assistir" ? "📺 Assistir junto" : qual === "estadio" ? "🏟️ Estádio — Brasileirão" : "🎮 Jogos" + (jogoAtual ? " — " + jogoAtual.nome : "");
   if (qual === "texto") { naoLidas[canalAtual] = 0; renderMensagens(); }
   renderCanais();
   $("lateral").classList.remove("aberto");
@@ -544,7 +511,7 @@ function adicionarSistema(texto) {
 
 // =================== MEMBROS ===================
 function icones(u) { if (!u.voz) return ""; return "🔊" + (u.midia?.mic === false ? "🔇" : "") + (u.midia?.cam ? "📷" : "") + (u.midia?.tela ? "🖥️" : ""); }
-function iconesMembro(u) { return icones(u) + (u.assistindo ? "📺" : "") + (u.pos ? "🗺️" : ""); }
+function iconesMembro(u) { return icones(u) + (u.assistindo ? "📺" : ""); }
 function renderMembros() {
   const el = $("membros"); el.replaceChildren();
   const t = document.createElement("div"); t.className = "secao"; t.textContent = `Online — ${usuarios.length}`; el.appendChild(t);
@@ -891,7 +858,7 @@ function tagVolume(nome) {
   return v === 0 ? " 🔇" : v !== 1 ? ` 🔉${Math.round(v * 100)}%` : "";
 }
 function aplicarVolumeRemoto(r) {
-  const v = volumeDe(nomeDe(r.peerId)) * fatorProx(r.peerId);
+  const v = volumeDe(nomeDe(r.peerId));
   const vid = r.el?.querySelector?.("video");
   if (vid) vid.volume = Math.min(1, v); // áudio da tela compartilhada
   const a = r.audioEl; if (!a) return;
@@ -967,7 +934,6 @@ setInterval(() => {
     if (chave === "local" || chave === "teste") atualizarMedidor(ativo ? nivel : 0);
     if (chave !== "teste" && agora - a.ultimo < 350) falando.add(chave === "local" ? eu.id : a.id);
   }
-  falandoAgora = falando;
   document.querySelectorAll(".falando").forEach((el) => { if (!falando.has(el.dataset.fala)) el.classList.remove("falando"); });
   for (const id of falando) if (id) document.querySelectorAll(`[data-fala="${id}"]`).forEach((el) => el.classList.add("falando"));
 }, 80);
@@ -1371,209 +1337,6 @@ $("tocar-overlay").onclick = () => {
 };
 $("item-assistir").onclick = () => mostrar("assistir");
 
-
-// =================== SALA 2D (mapa com áudio por proximidade) ===================
-const MAPA = { w: 1600, h: 1000 };
-const ZONAS = [
-  { id: "assistir", nome: "📺 Assistir junto", x: 1040, y: 90, w: 460, h: 340 },
-  { id: "jogos", nome: "🎮 Jogos", x: 110, y: 590, w: 440, h: 320 },
-];
-const OUVIR_PERTO = 170, OUVIR_LONGE = 480, VELOCIDADE = 270;
-let minhaPos = null, destino = null, teclas = {}, loopMapa = false, ultimoEnvioPos = 0, posEnviada = "", ultimoVolume = 0;
-let falandoAgora = new Set();
-const avatares = new Map(); // id -> { x, y, tx, ty } dos outros
-const cam = { escala: 1, ox: 0, oy: 0 };
-
-// 1 = ouve normal, 0 = não ouve. Só vale quando eu e a outra pessoa estamos na sala 2D.
-function fatorProx(peerId) {
-  if (!minhaPos) return 1;
-  const a = avatares.get(peerId); if (!a) return 1;
-  const d = Math.hypot(a.x - minhaPos.x, a.y - minhaPos.y);
-  if (d <= OUVIR_PERTO) return 1;
-  if (d >= OUVIR_LONGE) return 0;
-  return 1 - (d - OUVIR_PERTO) / (OUVIR_LONGE - OUVIR_PERTO);
-}
-
-function sincronizarMapa() {
-  const vivos = new Set();
-  for (const u of usuarios) {
-    if (u.id === eu.id || !u.pos) continue;
-    vivos.add(u.id);
-    const a = avatares.get(u.id);
-    if (a) { a.tx = u.pos.x; a.ty = u.pos.y; if (vista !== "mapa") { a.x = a.tx; a.y = a.ty; } }
-    else avatares.set(u.id, { x: u.pos.x, y: u.pos.y, tx: u.pos.x, ty: u.pos.y });
-  }
-  for (const id of [...avatares.keys()]) if (!vivos.has(id)) avatares.delete(id);
-  const n = usuarios.filter((u) => u.pos).length;
-  $("item-mapa").textContent = "🗺️ Sala 2D" + (n ? ` · ${n}` : "");
-  $("mapa-entrar-quem").textContent = n ? `Na sala agora: ${usuarios.filter((u) => u.pos).map((u) => u.nome).join(", ")}` : "Ninguém na sala ainda.";
-}
-function receberPos(m) {
-  const a = avatares.get(m.id);
-  if (a) { a.tx = m.x; a.ty = m.y; if (vista !== "mapa") { a.x = m.x; a.y = m.y; aplicarVolumes(); } }
-  else avatares.set(m.id, { x: m.x, y: m.y, tx: m.x, ty: m.y });
-}
-
-function enviarPos(forcar) {
-  if (!minhaPos) return;
-  const chave = Math.round(minhaPos.x) + "," + Math.round(minhaPos.y);
-  if (!forcar && chave === posEnviada) return;
-  posEnviada = chave; ultimoEnvioPos = performance.now();
-  enviar({ t: "pos", x: minhaPos.x, y: minhaPos.y });
-}
-function entrarMapa() {
-  minhaPos = { x: 800 + (Math.random() - 0.5) * 120, y: 540 + (Math.random() - 0.5) * 100 };
-  destino = null; enviarPos(true); renderMapaUI(); iniciarLoopMapa();
-}
-function sairMapa() {
-  minhaPos = null; destino = null; posEnviada = "";
-  enviar({ t: "pos", sair: true });
-  aplicarVolumes(); renderMapaUI();
-}
-function renderMapaUI() {
-  $("mapa-entrar").classList.toggle("esc", !!minhaPos);
-  $("mapa-area").classList.toggle("esc", !minhaPos);
-}
-
-function iniciarLoopMapa() {
-  if (loopMapa || !minhaPos || vista !== "mapa") return;
-  loopMapa = true;
-  let antes = performance.now();
-  const passo = (agora) => {
-    if (!minhaPos || vista !== "mapa") { loopMapa = false; teclas = {}; return; }
-    const dt = Math.min(0.05, (agora - antes) / 1000); antes = agora;
-    moverEu(dt, agora);
-    for (const a of avatares.values()) { const k = Math.min(1, dt * 12); a.x += (a.tx - a.x) * k; a.y += (a.ty - a.y) * k; }
-    if (emVoz && agora - ultimoVolume > 150) { ultimoVolume = agora; aplicarVolumes(); }
-    desenharMapa();
-    requestAnimationFrame(passo);
-  };
-  requestAnimationFrame(passo);
-}
-
-function moverEu(dt, agora) {
-  let dx = (teclas.d || teclas.arrowright ? 1 : 0) - (teclas.a || teclas.arrowleft ? 1 : 0);
-  let dy = (teclas.s || teclas.arrowdown ? 1 : 0) - (teclas.w || teclas.arrowup ? 1 : 0);
-  if (dx || dy) destino = null;
-  else if (destino) {
-    const ddx = destino.x - minhaPos.x, ddy = destino.y - minhaPos.y, d = Math.hypot(ddx, ddy);
-    if (d < 4) destino = null; else { dx = ddx / d; dy = ddy / d; if (d < VELOCIDADE * dt) { minhaPos.x = destino.x; minhaPos.y = destino.y; dx = dy = 0; destino = null; } }
-  }
-  if (dx || dy) {
-    const n = Math.hypot(dx, dy) || 1;
-    minhaPos.x = Math.max(40, Math.min(MAPA.w - 40, minhaPos.x + (dx / n) * VELOCIDADE * dt));
-    minhaPos.y = Math.max(60, Math.min(MAPA.h - 40, minhaPos.y + (dy / n) * VELOCIDADE * dt));
-    if (agora - ultimoEnvioPos > 110) enviarPos();
-  } else if (agora - ultimoEnvioPos > 110) enviarPos(); // posição final ao parar
-  // zona em que estou (sofá da TV, mesa de jogos)
-  const z = ZONAS.find((z) => minhaPos.x > z.x && minhaPos.x < z.x + z.w && minhaPos.y > z.y && minhaPos.y < z.y + z.h);
-  const b = $("mapa-acao");
-  b.classList.toggle("esc", !z);
-  if (z) { b.textContent = "Abrir " + z.nome; b.dataset.zona = z.id; }
-}
-
-function desenharMapa() {
-  const cv = $("mapa"), dpr = window.devicePixelRatio || 1;
-  const cw = cv.clientWidth, ch = cv.clientHeight;
-  if (!cw || !ch) return;
-  if (cv.width !== Math.round(cw * dpr) || cv.height !== Math.round(ch * dpr)) { cv.width = Math.round(cw * dpr); cv.height = Math.round(ch * dpr); }
-  const c = cv.getContext("2d");
-  // câmera: no PC mostra a sala toda; no celular aproxima e segue você
-  const cabe = Math.min(cw / MAPA.w, ch / MAPA.h), esc = cabe >= 0.42 ? cabe : 0.55;
-  const vw = cw / esc, vh = ch / esc;
-  const cx = vw >= MAPA.w ? MAPA.w / 2 : Math.max(vw / 2, Math.min(MAPA.w - vw / 2, minhaPos.x));
-  const cy = vh >= MAPA.h ? MAPA.h / 2 : Math.max(vh / 2, Math.min(MAPA.h - vh / 2, minhaPos.y));
-  cam.escala = esc; cam.ox = cw / 2 - cx * esc; cam.oy = ch / 2 - cy * esc;
-  c.setTransform(dpr, 0, 0, dpr, 0, 0);
-  c.fillStyle = "#101116"; c.fillRect(0, 0, cw, ch);
-  c.setTransform(dpr * esc, 0, 0, dpr * esc, dpr * cam.ox, dpr * cam.oy);
-
-  const caixa = (x, y, w, h, r, cor) => { c.fillStyle = cor; c.beginPath(); c.roundRect(x, y, w, h, r); c.fill(); };
-  const bola = (x, y, r, cor) => { c.fillStyle = cor; c.beginPath(); c.arc(x, y, r, 0, 7); c.fill(); };
-  const texto = (t, x, y, tam, cor, peso = 600) => { c.font = `${peso} ${tam}px system-ui, sans-serif`; c.fillStyle = cor; c.textAlign = "center"; c.textBaseline = "middle"; c.fillText(t, x, y); };
-
-  // chão e paredes
-  caixa(0, 0, MAPA.w, MAPA.h, 26, "#3a3d4a");
-  caixa(14, 14, MAPA.w - 28, MAPA.h - 28, 16, "#262832");
-  c.strokeStyle = "#2c2f3a"; c.lineWidth = 1; c.beginPath();
-  for (let x = 94; x < MAPA.w - 14; x += 80) { c.moveTo(x, 14); c.lineTo(x, MAPA.h - 14); }
-  for (let y = 94; y < MAPA.h - 14; y += 80) { c.moveTo(14, y); c.lineTo(MAPA.w - 14, y); }
-  c.stroke();
-  // tapete central
-  caixa(580, 380, 440, 300, 28, "#34386a"); caixa(600, 400, 400, 260, 20, "#3d4280");
-  texto("🛋️ Salinha", 800, 530, 34, "#ffffff22", 800);
-  // cantinho da TV
-  const zt = ZONAS[0];
-  caixa(zt.x, zt.y, zt.w, zt.h, 20, "#2e3140");
-  caixa(zt.x + 110, zt.y + 14, 240, 22, 6, "#0b0b0e");
-  c.fillStyle = assistir.videoId && assistir.tocando ? "#7c8cff33" : "#ffffff0d";
-  c.beginPath(); c.moveTo(zt.x + 120, zt.y + 36); c.lineTo(zt.x + 340, zt.y + 36); c.lineTo(zt.x + 400, zt.y + 190); c.lineTo(zt.x + 60, zt.y + 190); c.fill();
-  caixa(zt.x + 80, zt.y + 210, 300, 34, 14, "#4752c4"); caixa(zt.x + 80, zt.y + 236, 300, 62, 16, "#5865f2");
-  caixa(zt.x + 62, zt.y + 222, 30, 78, 12, "#4752c4"); caixa(zt.x + 368, zt.y + 222, 30, 78, 12, "#4752c4");
-  texto(zt.nome + (assistir.videoId && assistir.tocando ? " · ao vivo" : ""), zt.x + zt.w / 2, zt.y + zt.h - 18, 17, "#b8bac4");
-  // mesa de jogos
-  const zj = ZONAS[1], mx = zj.x + zj.w / 2, my = zj.y + zj.h / 2 - 12;
-  caixa(zj.x, zj.y, zj.w, zj.h, 20, "#2e3140");
-  for (let i = 0; i < 6; i++) bola(mx + Math.cos(i * 1.047) * 128, my + Math.sin(i * 1.047) * 104, 20, "#4a4d5c");
-  c.fillStyle = "#7a5230"; c.beginPath(); c.ellipse(mx, my, 104, 80, 0, 0, 7); c.fill();
-  c.fillStyle = "#2f7d4f"; c.beginPath(); c.ellipse(mx, my, 90, 66, 0, 0, 7); c.fill();
-  texto("🎲", mx, my, 34, "#fff");
-  texto(zj.nome, mx, zj.y + zj.h - 18, 17, "#b8bac4");
-  // plantas
-  for (const [px, py] of [[60, 70], [MAPA.w - 60, MAPA.h - 60], [60, 500], [960, 70]]) { bola(px, py, 24, "#6b4a2b"); bola(px, py - 6, 22, "#2f8f4e"); bola(px - 10, py - 14, 13, "#3fae63"); bola(px + 11, py - 12, 12, "#3fae63"); }
-
-  // alcance da minha voz
-  if (emVoz) {
-    c.strokeStyle = "#ffffff14"; c.lineWidth = 2; c.setLineDash([10, 10]);
-    c.beginPath(); c.arc(minhaPos.x, minhaPos.y, OUVIR_LONGE, 0, 7); c.stroke(); c.setLineDash([]);
-    c.fillStyle = "#3ba55d12"; c.beginPath(); c.arc(minhaPos.x, minhaPos.y, OUVIR_PERTO, 0, 7); c.fill();
-  }
-  if (destino) { c.strokeStyle = "#ffffff55"; c.lineWidth = 2; c.beginPath(); c.arc(destino.x, destino.y, 9, 0, 7); c.stroke(); }
-
-  // bonecos (os de baixo por cima)
-  const lista = [];
-  for (const u of usuarios) {
-    if (u.id === eu.id) lista.push({ u, x: minhaPos.x, y: minhaPos.y, eu: true });
-    else { const a = avatares.get(u.id); if (a) lista.push({ u, x: a.x, y: a.y }); }
-  }
-  lista.sort((a, b) => a.y - b.y);
-  for (const p of lista) {
-    const f = p.eu || !emVoz || !p.u.voz ? 1 : fatorProx(p.u.id);
-    c.globalAlpha = 0.45 + 0.55 * f;
-    c.fillStyle = "#00000055"; c.beginPath(); c.ellipse(p.x, p.y + 24, 22, 8, 0, 0, 7); c.fill();
-    if (falandoAgora.has(p.u.id)) { c.strokeStyle = "#3ba55d"; c.lineWidth = 5; c.beginPath(); c.arc(p.x, p.y, 29, 0, 7); c.stroke(); }
-    bola(p.x, p.y, 25, cor(p.u.nome));
-    if (p.eu) { c.strokeStyle = "#fff"; c.lineWidth = 2.5; c.beginPath(); c.arc(p.x, p.y, 25, 0, 7); c.stroke(); }
-    texto(inicial(p.u.nome), p.x, p.y + 1, 22, "#fff", 800);
-    const rot = (p.eu ? "Você" : p.u.nome) + (p.u.voz ? (p.u.midia?.mic === false ? " 🔇" : " 🔊") : "");
-    c.font = "600 14px system-ui, sans-serif"; const lw = c.measureText(rot).width + 14;
-    caixa(p.x - lw / 2, p.y + 36, lw, 22, 8, "#000000aa"); texto(rot, p.x, p.y + 48, 14, "#fff");
-    c.globalAlpha = 1;
-  }
-  $("mapa-info").textContent = emVoz ? "🔊 Chegue perto de alguém pra ouvir e falar" : "Entre na call (🔊 Sala de voz) pra conversar por proximidade";
-}
-
-// ---- controles ----
-function telaPraMapa(e) {
-  const r = $("mapa").getBoundingClientRect();
-  return { x: (e.clientX - r.left - cam.ox) / cam.escala, y: (e.clientY - r.top - cam.oy) / cam.escala };
-}
-$("mapa").addEventListener("pointerdown", (e) => {
-  if (!minhaPos) return;
-  const p = telaPraMapa(e);
-  destino = { x: Math.max(40, Math.min(MAPA.w - 40, p.x)), y: Math.max(60, Math.min(MAPA.h - 40, p.y)) };
-});
-addEventListener("keydown", (e) => {
-  if (vista !== "mapa" || !minhaPos || /INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || "")) return;
-  const k = e.key.toLowerCase();
-  if (["w", "a", "s", "d", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) { teclas[k] = true; e.preventDefault(); }
-});
-addEventListener("keyup", (e) => { delete teclas[e.key.toLowerCase()]; });
-addEventListener("blur", () => { teclas = {}; });
-$("btn-entrar-mapa").onclick = entrarMapa;
-$("btn-sair-mapa").onclick = sairMapa;
-$("mapa-acao").onclick = () => { const z = $("mapa-acao").dataset.zona; mostrar(z); if (z === "assistir" && !participando) entrarSessao(); };
-$("item-mapa").onclick = () => mostrar("mapa");
 
 // =================== ESTÁDIO (Brasileirão ao vivo) ===================
 let futebol = { jogos: [], tabela: [], atualizadoEm: 0 };
