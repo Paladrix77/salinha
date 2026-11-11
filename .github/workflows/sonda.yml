@@ -24,7 +24,6 @@ jobs:
             https://www.lance.com.br/feed \
             https://www.gazetaesportiva.com/feed/ \
             https://www.estadao.com.br/arc/outboundfeeds/feeds/rss/sections/esportes/futebol/ \
-            https://www.terra.com.br/rss/Controller?channelid=8d2a7a8d2ee63210VgnVCM4000009bf154d0RCRD&ctName=atomo-noticia \
             "https://site.api.espn.com/apis/site/v2/sports/soccer/bra.1/news?lang=pt&region=br&limit=5" \
             https://www.metropoles.com/feed \
             https://www.poder360.com.br/feed/ ; do
