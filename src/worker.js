@@ -487,7 +487,8 @@ function lerRSS(xml, fonte) {
   const itens = [];
   for (const [, it] of xml.matchAll(/<item[\s>]([\s\S]*?)<\/item>/g)) {
     const tag = (n) => { const m = it.match(new RegExp("<" + n + "(?:\\s[^>]*)?>([\\s\\S]*?)</" + n + ">")); return m ? m[1] : ""; };
-    const bruto = tag("description") + tag("content:encoded");
+    const bruto = (tag("description") + tag("content:encoded"))
+      .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#0?39;/g, "'"); // algumas fontes mandam o HTML escapado
     const img = [...it.matchAll(/<media:(?:content|thumbnail)[^>]*url="([^"]+)"/g)].map((x) => x[1]).find(imagemBoa)
       || it.match(/<enclosure[^>]*url="([^"]+)"[^>]*type="image/)?.[1]
       || [...bruto.matchAll(/<img[^>]*src=["']([^"']+)["']/g)].map((x) => x[1]).find(imagemBoa)
