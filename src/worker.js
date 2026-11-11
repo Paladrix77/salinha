@@ -1,7 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 import { executarBot, NOME_BOT } from "./bots.js";
 
-const CANAIS = ["geral", "jogos", "bots"];
+const CANAIS = ["geral", "jogos", "futebol", "bots"];
 const HISTORICO_POR_CANAL = 100;
 
 export default {
@@ -105,7 +105,10 @@ export class Sala extends DurableObject {
     if (m.t === "entrar") {
       eu.nome = String(m.nome || "").trim().slice(0, 24) || "Anônimo";
       ws.serializeAttachment(eu);
-      this.enviar(ws, { t: "bemvindo", id: eu.id, canais: CANAIS, historico: this.historico(), assistir: this.assistir, agora: Date.now() });
+      await this.carregarFutebol();
+      this.enviar(ws, { t: "bemvindo", id: eu.id, canais: CANAIS, historico: this.historico(), assistir: this.assistir, agora: Date.now(), futebol: this.dadosFutebol() });
+      // liga o acompanhamento dos jogos enquanto tiver gente online
+      if (!(await this.ctx.storage.getAlarm())) await this.ctx.storage.setAlarm(Date.now() + 300);
       this.avisarUsuarios();
       this.transmitir({ t: "sistema", texto: `${eu.nome} entrou` }, ws);
       return;
@@ -118,7 +121,7 @@ export class Sala extends DurableObject {
         const texto = String(m.texto || "").trim().slice(0, 2000);
         if (!texto) return;
         this.salvarETransmitir(canal, eu.nome, texto, false);
-        const resposta = executarBot(texto, { autor: eu.nome, canal, usuarios: this.usuarios() });
+        const resposta = executarBot(texto, { autor: eu.nome, canal, usuarios: this.usuarios(), futebol: this.futebol ? this.dadosFutebol() : null });
         if (resposta) this.salvarETransmitir(canal, NOME_BOT, String(resposta).slice(0, 2000), true);
         break;
       }
@@ -163,6 +166,68 @@ export class Sala extends DurableObject {
       case "jogo": // repassa dados do jogo pra todo mundo (menos quem mandou)
         this.transmitir({ t: "jogo", jogo: String(m.jogo || ""), de: eu.id, nome: eu.nome, dados: m.dados }, ws);
         break;
+    }
+  }
+
+  // ---------- Estádio (Brasileirão, dados da ESPN) ----------
+  async carregarFutebol() {
+    if (!this.futebol) this.futebol = (await this.ctx.storage.get("futebol")) || { jogos: {}, tabela: [], atualizadoEm: 0, tabelaEm: 0, historicoEm: 0 };
+    return this.futebol;
+  }
+
+  dadosFutebol() {
+    const f = this.futebol;
+    return { jogos: Object.values(f.jogos).sort((a, b) => a.data.localeCompare(b.data)), tabela: f.tabela, atualizadoEm: f.atualizadoEm };
+  }
+
+  async alarm() {
+    if (!this.conexoes().length) return; // ninguém online: para de consultar
+    try { await this.atualizarFutebol(); } catch (e) { console.log("futebol:", e.message); }
+    const agora = Date.now();
+    const jogos = Object.values(this.futebol.jogos);
+    const aoVivo = jogos.some((j) => j.estado === "in");
+    const perto = jogos.some((j) => j.estado === "pre" && new Date(j.data) - agora < 20 * 60e3 && agora - new Date(j.data) < 3 * 3600e3);
+    await this.ctx.storage.setAlarm(agora + (aoVivo ? 30e3 : perto ? 60e3 : 15 * 60e3));
+  }
+
+  async atualizarFutebol() {
+    const f = await this.carregarFutebol();
+    const agora = Date.now();
+    const base = ESPN + "/site/v2/sports/soccer/bra.1/scoreboard?lang=pt&region=br";
+    const urls = [base, base + "&dates=" + diaBR(0)];
+    const completo = agora - f.historicoEm > 3600e3; // de hora em hora: últimos 7 dias e próximos 7
+    if (completo) for (let d = -7; d <= 7; d++) if (d) urls.push(base + "&dates=" + diaBR(d));
+    const pedirTabela = agora - f.tabelaEm > 10 * 60e3;
+    const [respostas, tabela] = await Promise.all([
+      Promise.allSettled(urls.map(buscarJSON)),
+      pedirTabela ? buscarJSON(ESPN + "/v2/sports/soccer/bra.1/standings?lang=pt&region=br").catch(() => null) : null,
+    ]);
+    if (respostas.every((r) => r.status === "rejected")) throw new Error("ESPN fora do ar");
+
+    const avisar = f.atualizadoEm && agora - f.atualizadoEm < 5 * 60e3; // dado antigo demais: não solta alerta atrasado
+    const eventos = [];
+    for (const r of respostas) {
+      if (r.status !== "fulfilled") continue;
+      for (const e of r.value.events || []) {
+        const novo = resumirJogo(e); if (!novo) continue;
+        const antes = f.jogos[novo.id];
+        if (avisar && antes) eventos.push(...compararJogo(antes, novo));
+        f.jogos[novo.id] = novo;
+      }
+    }
+    for (const [id, j] of Object.entries(f.jogos)) if (agora - new Date(j.data) > 9 * 864e5) delete f.jogos[id];
+    if (tabela) { const t = resumirTabela(tabela); if (t.length) { f.tabela = t; f.tabelaEm = agora; } }
+    if (completo) f.historicoEm = agora;
+    if (eventos.some((e) => e.tipo === "fim")) f.tabelaEm = 0; // acabou jogo: atualiza a tabela na próxima
+    f.atualizadoEm = agora;
+    await this.ctx.storage.put("futebol", f);
+
+    this.transmitir({ t: "futebol", dados: this.dadosFutebol() });
+    const vistos = new Set();
+    for (const ev of eventos) {
+      if (vistos.has(ev.texto)) continue; vistos.add(ev.texto);
+      this.salvarETransmitir("futebol", NOME_BOT, ev.texto, true);
+      if (ev.tipo === "gol") this.transmitir({ t: "gol", ...ev });
     }
   }
 
@@ -275,4 +340,63 @@ async function tituloDoYoutube(videoId) {
     if (r.ok) return String((await r.json()).title || "").slice(0, 150) || "Vídeo do YouTube";
   } catch {}
   return "Vídeo do YouTube";
+}
+
+// ---------- helpers do futebol ----------
+const ESPN = "https://site.api.espn.com/apis";
+// dia no horário de Brasília, formato AAAAMMDD
+function diaBR(offset = 0) {
+  return new Date(Date.now() - 3 * 3600e3 + offset * 864e5).toISOString().slice(0, 10).replace(/-/g, "");
+}
+async function buscarJSON(url) {
+  const r = await fetch(url, { headers: { "user-agent": "Mozilla/5.0 (Salinha)" }, signal: AbortSignal.timeout(8000) });
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  return r.json();
+}
+function resumirJogo(e) {
+  const c = e.competitions?.[0];
+  const casa = c?.competitors?.find((x) => x.homeAway === "home"), fora = c?.competitors?.find((x) => x.homeAway === "away");
+  if (!casa || !fora || !e.date) return null;
+  const time = (x) => ({
+    id: String(x.team?.id || x.id || ""), nome: x.team?.shortDisplayName || x.team?.displayName || "?",
+    sigla: x.team?.abbreviation || "", logo: x.team?.logo || "", gols: parseInt(x.score) || 0,
+  });
+  const gols = (c.details || []).filter((d) => d.scoringPlay).map((d) => ({
+    min: d.clock?.displayValue || "",
+    lado: String(d.team?.id) === String(casa.team?.id || casa.id) ? "casa" : "fora",
+    autor: d.athletesInvolved?.[0]?.shortName || d.athletesInvolved?.[0]?.displayName || "",
+    contra: !!d.ownGoal, penalti: !!d.penaltyKick,
+  }));
+  const tipo = e.status?.type || {};
+  return {
+    id: String(e.id), data: e.date, estado: tipo.state || "pre", fase: tipo.name || "", desc: tipo.description || "",
+    relogio: e.status?.displayClock || "", casa: time(casa), fora: time(fora), gols, estadio: c.venue?.fullName || "",
+  };
+}
+function compararJogo(a, n) {
+  const ev = [], placar = `${n.casa.nome} ${n.casa.gols} x ${n.fora.gols} ${n.fora.nome}`;
+  if (a.estado === "pre" && n.estado === "in") ev.push({ tipo: "inicio", texto: `🟢 Começou: ${n.casa.nome} x ${n.fora.nome}` });
+  for (const lado of ["casa", "fora"]) {
+    if (n[lado].gols > a[lado].gols && n.estado !== "pre") {
+      const ultimo = [...n.gols].reverse().find((g) => g.lado === lado);
+      const autor = ultimo?.autor ? ` — ${ultimo.autor}${ultimo.penalti ? " (pênalti)" : ultimo.contra ? " (contra)" : ""}` : "";
+      const min = n.estado === "in" && n.relogio ? ` (${n.relogio})` : "";
+      ev.push({ tipo: "gol", jogo: n.id, time: n[lado].nome, timeId: n[lado].id, logo: n[lado].logo, placar, texto: `⚽ GOL do ${n[lado].nome}! ${placar}${min}${autor}` });
+    } else if (n[lado].gols < a[lado].gols) {
+      ev.push({ tipo: "anulado", texto: `🚫 Gol do ${n[lado].nome} anulado. ${placar}` });
+    }
+  }
+  if (a.estado === "in" && a.fase !== "STATUS_HALFTIME" && n.fase === "STATUS_HALFTIME") ev.push({ tipo: "intervalo", texto: `⏸️ Intervalo: ${placar}` });
+  if (a.estado !== "post" && n.estado === "post") ev.push({ tipo: "fim", texto: `🏁 Fim de jogo: ${placar}` });
+  return ev;
+}
+function resumirTabela(t) {
+  const linhas = t.children?.[0]?.standings?.entries || [];
+  return linhas.map((l) => {
+    const s = Object.fromEntries((l.stats || []).map((x) => [x.name, x.value]));
+    return {
+      id: String(l.team?.id || ""), nome: l.team?.shortDisplayName || l.team?.displayName || "?", sigla: l.team?.abbreviation || "", logo: l.team?.logos?.[0]?.href || "",
+      pos: s.rank || 0, pts: s.points || 0, j: s.gamesPlayed || 0, v: s.wins || 0, e: s.ties || 0, d: s.losses || 0, sg: s.pointDifferential || 0,
+    };
+  }).sort((a, b) => a.pos - b.pos);
 }

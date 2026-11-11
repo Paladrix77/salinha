@@ -125,6 +125,52 @@
   body.modo-pip #video-area { position:fixed; inset:0; z-index:9999; max-height:none; aspect-ratio:auto; background:#000; }
   body.modo-pip #tocar-overlay { display:none; }
 
+  /* Estádio */
+  #estadio-barra { display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap; padding:10px 16px; border-bottom:1px solid #0006; }
+  #estadio-barra label { display:flex; flex-direction:column; gap:4px; font-size:11px; color:var(--sub); font-weight:700; text-transform:uppercase; }
+  #estadio-barra .campo { padding:7px 8px; } #estadio-barra .btn { padding:8px 10px; }
+  #estadio-atualizado { margin-left:auto; font-size:12px; color:var(--sub); }
+  #estadio-corpo { flex:1; display:flex; gap:16px; min-height:0; overflow:auto; padding:8px 16px 16px; align-items:flex-start; }
+  #estadio-jogos { flex:1; min-width:0; }
+  #estadio-lado { width:380px; flex-shrink:0; position:sticky; top:0; }
+  .jogo { background:var(--bg2); border-radius:10px; padding:10px 12px; margin:6px 0; border:1px solid transparent; }
+  .jogo.in { border-color:#ed424566; background:linear-gradient(90deg, #ed424514, var(--bg2) 40%); }
+  .jogo.meu { box-shadow:inset 3px 0 0 var(--azul); }
+  .linha-jogo { display:flex; align-items:center; gap:8px; }
+  .time { flex:1; display:flex; align-items:center; gap:8px; font-weight:600; min-width:0; }
+  .time span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .time.fora { flex-direction:row-reverse; text-align:right; }
+  .time img { width:28px; height:28px; object-fit:contain; flex-shrink:0; }
+  .meio { width:86px; text-align:center; flex-shrink:0; }
+  .placar { font-size:20px; font-weight:800; font-variant-numeric:tabular-nums; }
+  .jogo.pre .placar { color:var(--sub); font-size:15px; }
+  .status { font-size:11px; color:var(--sub); } .jogo.in .status { color:#ff8a8a; font-weight:700; }
+  .gols-jogo { display:flex; justify-content:space-between; gap:90px; font-size:11px; color:var(--sub); margin-top:6px; }
+  .gols-jogo span { flex:1; }
+  #tabela-br { width:100%; border-collapse:collapse; font-size:13px; font-variant-numeric:tabular-nums; }
+  #tabela-br th { color:var(--sub); font-size:11px; padding:4px; text-align:center; }
+  #tabela-br td { padding:5px 4px; text-align:center; border-top:1px solid #ffffff0a; }
+  #tabela-br .t-nome { text-align:left; display:flex; align-items:center; gap:6px; white-space:nowrap; }
+  #tabela-br .t-nome img { width:18px; height:18px; object-fit:contain; }
+  #tabela-br .t-pos { color:var(--sub); width:26px; } #tabela-br .t-pts { font-weight:800; }
+  #tabela-br tr.g4 .t-pos { box-shadow:inset 3px 0 0 #3b82f6; color:var(--txt); }
+  #tabela-br tr.z4 .t-pos { box-shadow:inset 3px 0 0 var(--verm); color:var(--txt); }
+  #tabela-br tr.meu { background:#5865f226; }
+  #legenda-tabela { font-size:11px; color:var(--sub); margin-top:8px; display:flex; align-items:center; gap:6px; }
+  .lg { width:10px; height:10px; border-radius:2px; display:inline-block; } .lg.g4 { background:#3b82f6; } .lg.z4 { background:var(--verm); margin-left:8px; }
+  #gol-aviso { position:fixed; top:14px; left:50%; transform:translateX(-50%); z-index:40; display:flex; align-items:center; gap:14px; cursor:pointer;
+    background:linear-gradient(135deg, #1f8f4d, #146c39); color:#fff; padding:14px 22px; border-radius:16px; box-shadow:0 14px 50px #000c; max-width:92vw; animation:gol-entra .45s cubic-bezier(.2,1.6,.4,1); }
+  #gol-aviso.meu { background:linear-gradient(135deg, #f5b301, #e07b00); }
+  #gol-aviso.esc { display:none; }
+  #gol-logo { width:52px; height:52px; object-fit:contain; }
+  #gol-time { font-size:22px; font-weight:900; letter-spacing:.02em; } #gol-placar { font-size:15px; font-weight:600; opacity:.95; }
+  .gol-bola { font-size:30px; animation:gol-bola 1s linear infinite; }
+  @keyframes gol-entra { from { transform:translate(-50%, -140%); } to { transform:translate(-50%, 0); } }
+  @keyframes gol-bola { to { transform:rotate(360deg); } }
+  @keyframes tremer { 0%,100% { transform:translate(0,0); } 20% { transform:translate(-5px,3px); } 40% { transform:translate(5px,-3px); } 60% { transform:translate(-4px,-2px); } 80% { transform:translate(4px,2px); } }
+  body.tremer #app { animation:tremer .35s linear 3; }
+  @media (prefers-reduced-motion: reduce) { body.tremer #app, .gol-bola { animation:none; } }
+
   /* Sala 2D */
   #mapa-entrar { text-align:center; padding:40px 16px; color:var(--sub); }
   #mapa-entrar h3 { color:var(--txt); margin:0 0 8px; font-size:22px; }
@@ -178,6 +224,11 @@
 
   @media (max-width: 800px) {
     #assistir-corpo { flex-direction:column; }
+    #estadio-corpo { flex-direction:column; padding:8px 10px 16px; }
+    #estadio-lado { width:100%; position:static; }
+    #estadio-jogos { width:100%; }
+    #estadio-atualizado { margin-left:0; width:100%; }
+    .gols-jogo { gap:70px; }
     #fila-lado { width:auto; border-left:none; border-top:1px solid #0006; overflow:visible; }
     #assistir-principal { padding:10px; }
     .so-pc { display:none; }
@@ -209,6 +260,8 @@
     <div class="secao">Voz</div>
     <div style="padding:0 8px"><button class="item" id="item-voz">🔊 Sala de voz</button></div>
     <div id="lista-voz-sidebar"></div>
+    <div class="secao">Futebol</div>
+    <div style="padding:0 8px"><button class="item" id="item-estadio">🏟️ Estádio</button></div>
     <div class="secao">Sala</div>
     <div style="padding:0 8px"><button class="item" id="item-mapa">🗺️ Sala 2D</button></div>
     <div class="secao">Assistir</div>
@@ -248,6 +301,23 @@
         <button class="btn sec" id="btn-tela">🖥️ Tela</button>
         <button class="btn sec" id="btn-config">⚙️ Configurar</button>
         <button class="btn verm" id="btn-sair">Sair da call</button>
+      </div>
+    </section>
+
+    <section id="vista-estadio" class="vista esc">
+      <div id="estadio-barra">
+        <label>Meu time <select id="sel-time" class="campo"></select></label>
+        <label>Aviso de gol <select id="sel-avisos" class="campo"><option value="todos">Todos os jogos</option><option value="meu">Só do meu time</option><option value="nenhum">Desligado</option></select></label>
+        <button class="btn sec" id="btn-som-gol">🔊 Som do gol</button>
+        <span id="estadio-atualizado"></span>
+      </div>
+      <div id="estadio-corpo">
+        <div id="estadio-jogos"></div>
+        <div id="estadio-lado">
+          <div class="secao">Classificação · Brasileirão</div>
+          <table id="tabela-br"><thead><tr><th></th><th></th><th title="Pontos">P</th><th title="Jogos">J</th><th title="Vitórias">V</th><th title="Empates">E</th><th title="Derrotas">D</th><th title="Saldo de gols">SG</th></tr></thead><tbody id="estadio-tabela"></tbody></table>
+          <div id="legenda-tabela"><span class="lg g4"></span> G4 <span class="lg z4"></span> Z4</div>
+        </div>
       </div>
     </section>
 
@@ -323,6 +393,12 @@
   <aside id="membros"></aside>
 </div>
 
+<div id="gol-aviso" class="esc">
+  <img id="gol-logo" alt="">
+  <div><div id="gol-time"></div><div id="gol-placar"></div></div>
+  <span class="gol-bola">⚽</span>
+</div>
+
 <div id="pop-volume" class="esc">
   <div class="pop-topo"><b id="pop-nome"></b><button id="pop-fechar" title="Fechar">✕</button></div>
   <div class="pop-linha"><span>🔈</span><input type="range" id="pop-slider" min="0" max="200" step="5" value="100"><span id="pop-valor">100%</span></div>
@@ -385,7 +461,7 @@ function tratar(m) {
     case "bemvindo":
       eu.id = m.id; canais = m.canais; historico = m.historico;
       $("eu-nome").textContent = "👤 " + eu.nome; $("eu-nome").dataset.fala = eu.id;
-      renderCanais(); renderMensagens(); receberAssistir(m.assistir, m.agora);
+      renderCanais(); renderMensagens(); receberAssistir(m.assistir, m.agora); receberFutebol(m.futebol);
       if (participando) enviar({ t: "assistindo", ativo: true });
       if (minhaPos) enviarPos(true);
       if (conectadoAntes) adicionarSistema("Reconectado!");
@@ -405,6 +481,8 @@ function tratar(m) {
     case "sinal": tratarSinal(m.de, m.dados); break;
     case "assistir": receberAssistir(m.estado, m.agora); break;
     case "pos": receberPos(m); break;
+    case "futebol": receberFutebol(m.dados); break;
+    case "gol": receberGol(m); break;
     case "jogo":
       if (jogoAtual && m.jogo === jogoAtual.id) $("quadro-jogo").contentWindow?.postMessage({ salinha: true, tipo: "recebido", de: m.de, nome: m.nome, dados: m.dados }, "*");
       break;
@@ -414,13 +492,15 @@ function tratar(m) {
 // =================== NAVEGAÇÃO ===================
 function mostrar(qual) {
   vista = qual;
-  for (const v of ["texto", "voz", "mapa", "assistir", "jogos"]) $("vista-" + v).classList.toggle("esc", v !== qual);
+  for (const v of ["texto", "voz", "estadio", "mapa", "assistir", "jogos"]) $("vista-" + v).classList.toggle("esc", v !== qual);
   $("item-voz").classList.toggle("ativo", qual === "voz");
   $("item-jogos").classList.toggle("ativo", qual === "jogos");
   $("item-assistir").classList.toggle("ativo", qual === "assistir");
   $("item-mapa").classList.toggle("ativo", qual === "mapa");
+  $("item-estadio").classList.toggle("ativo", qual === "estadio");
+  if (qual === "estadio") renderEstadio();
   if (qual === "mapa") { renderMapaUI(); iniciarLoopMapa(); }
-  $("titulo").textContent = qual === "texto" ? "# " + canalAtual : qual === "voz" ? "🔊 Sala de voz" : qual === "assistir" ? "📺 Assistir junto" : qual === "mapa" ? "🗺️ Sala 2D" : "🎮 Jogos" + (jogoAtual ? " — " + jogoAtual.nome : "");
+  $("titulo").textContent = qual === "texto" ? "# " + canalAtual : qual === "voz" ? "🔊 Sala de voz" : qual === "assistir" ? "📺 Assistir junto" : qual === "mapa" ? "🗺️ Sala 2D" : qual === "estadio" ? "🏟️ Estádio — Brasileirão" : "🎮 Jogos" + (jogoAtual ? " — " + jogoAtual.nome : "");
   if (qual === "texto") { naoLidas[canalAtual] = 0; renderMensagens(); }
   renderCanais();
   $("lateral").classList.remove("aberto");
@@ -1494,6 +1574,136 @@ $("btn-entrar-mapa").onclick = entrarMapa;
 $("btn-sair-mapa").onclick = sairMapa;
 $("mapa-acao").onclick = () => { const z = $("mapa-acao").dataset.zona; mostrar(z); if (z === "assistir" && !participando) entrarSessao(); };
 $("item-mapa").onclick = () => mostrar("mapa");
+
+// =================== ESTÁDIO (Brasileirão ao vivo) ===================
+let futebol = { jogos: [], tabela: [], atualizadoEm: 0 };
+const prefFut = { time: lerLocal("salinha-time") || "", avisos: lerLocal("salinha-avisos-gol") || "todos", som: lerLocal("salinha-som-gol") !== "nao" };
+
+function receberFutebol(dados) {
+  if (!dados) return;
+  futebol = dados;
+  const aoVivo = futebol.jogos.filter((j) => j.estado === "in").length;
+  $("item-estadio").textContent = "🏟️ Estádio" + (aoVivo ? ` · 🔴 ${aoVivo}` : "");
+  if (vista === "estadio") renderEstadio();
+}
+
+function statusJogo(j) {
+  if (j.estado === "in") return j.fase === "STATUS_HALFTIME" ? "Intervalo" : (j.relogio || "Ao vivo");
+  if (j.estado === "post") return "Encerrado";
+  return new Date(j.data).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+}
+function diaJogo(j) {
+  const d = new Date(j.data), hoje = new Date(), amanha = new Date(Date.now() + 864e5), ontem = new Date(Date.now() - 864e5);
+  const igual = (a, b) => a.toDateString() === b.toDateString();
+  if (igual(d, hoje)) return "Hoje";
+  if (igual(d, amanha)) return "Amanhã";
+  if (igual(d, ontem)) return "Ontem";
+  const t = d.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "2-digit" });
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+
+function cartaoJogo(j) {
+  const d = document.createElement("div");
+  d.className = "jogo " + j.estado + (prefFut.time && (j.casa.id === prefFut.time || j.fora.id === prefFut.time) ? " meu" : "");
+  const lado = (t, classe) => {
+    const l = document.createElement("div"); l.className = "time " + classe;
+    if (t.logo) { const img = document.createElement("img"); img.src = t.logo; img.alt = ""; img.loading = "lazy"; l.appendChild(img); }
+    const n = document.createElement("span"); n.textContent = t.nome; l.appendChild(n);
+    return l;
+  };
+  const meio = document.createElement("div"); meio.className = "meio";
+  const placar = document.createElement("div"); placar.className = "placar";
+  placar.textContent = j.estado === "pre" ? "x" : `${j.casa.gols} x ${j.fora.gols}`;
+  const st = document.createElement("div"); st.className = "status"; st.textContent = (j.estado === "in" ? "🔴 " : "") + statusJogo(j);
+  meio.append(placar, st);
+  const linha = document.createElement("div"); linha.className = "linha-jogo";
+  linha.append(lado(j.casa, "casa"), meio, lado(j.fora, "fora"));
+  d.appendChild(linha);
+  if (j.gols.length) {
+    const g = document.createElement("div"); g.className = "gols-jogo";
+    const txt = (lado) => j.gols.filter((x) => x.lado === lado).map((x) => `${x.autor || "Gol"} ${x.min}${x.penalti ? " (p)" : x.contra ? " (contra)" : ""}`).join(", ");
+    const a = document.createElement("span"); a.textContent = txt("casa");
+    const b = document.createElement("span"); b.textContent = txt("fora"); b.style.textAlign = "right";
+    g.append(a, b); d.appendChild(g);
+  }
+  return d;
+}
+
+function renderEstadio() {
+  const cx = $("estadio-jogos"); cx.replaceChildren();
+  const grupo = (titulo, lista) => {
+    if (!lista.length) return;
+    const h = document.createElement("div"); h.className = "secao"; h.textContent = titulo; cx.appendChild(h);
+    lista.forEach((j) => cx.appendChild(cartaoJogo(j)));
+  };
+  const agora = Date.now();
+  const aoVivo = futebol.jogos.filter((j) => j.estado === "in");
+  const proximos = futebol.jogos.filter((j) => j.estado === "pre" && new Date(j.data) > agora - 3 * 3600e3);
+  const feitos = futebol.jogos.filter((j) => j.estado === "post").reverse();
+  grupo("🔴 Ao vivo", aoVivo);
+  const porDia = (lista) => { const m = new Map(); for (const j of lista) { const k = diaJogo(j); if (!m.has(k)) m.set(k, []); m.get(k).push(j); } return m; };
+  for (const [dia, lista] of porDia(proximos)) grupo("Próximos · " + dia, lista);
+  for (const [dia, lista] of porDia(feitos)) grupo("Resultados · " + dia, lista);
+  if (!futebol.jogos.length) { const v = document.createElement("div"); v.className = "fila-vazia"; v.textContent = "Carregando os jogos… (leva alguns segundos na primeira vez)"; cx.appendChild(v); }
+
+  const tb = $("estadio-tabela"); tb.replaceChildren();
+  for (const l of futebol.tabela) {
+    const tr = document.createElement("tr");
+    tr.className = (l.pos <= 4 ? "g4 " : l.pos >= 17 ? "z4 " : "") + (l.id === prefFut.time ? "meu" : "");
+    const td = (t, c) => { const x = document.createElement("td"); x.textContent = t; if (c) x.className = c; return x; };
+    const nome = document.createElement("td"); nome.className = "t-nome";
+    if (l.logo) { const img = document.createElement("img"); img.src = l.logo; img.alt = ""; img.loading = "lazy"; nome.appendChild(img); }
+    nome.appendChild(document.createTextNode(l.nome));
+    tr.append(td(l.pos, "t-pos"), nome, td(l.pts, "t-pts"), td(l.j), td(l.v), td(l.e), td(l.d), td((l.sg > 0 ? "+" : "") + l.sg));
+    tb.appendChild(tr);
+  }
+  // seletor do time
+  const sel = $("sel-time");
+  if (sel.options.length !== futebol.tabela.length + 1) {
+    sel.replaceChildren(new Option("Sem time", ""));
+    [...futebol.tabela].sort((a, b) => a.nome.localeCompare(b.nome)).forEach((l) => sel.add(new Option(l.nome, l.id)));
+    sel.value = prefFut.time;
+  }
+  $("sel-avisos").value = prefFut.avisos;
+  $("btn-som-gol").textContent = prefFut.som ? "🔊 Som do gol" : "🔇 Som do gol";
+  $("estadio-atualizado").textContent = futebol.atualizadoEm ? "Atualizado às " + hora(futebol.atualizadoEm) + " · dados: ESPN" : "";
+}
+
+// ---- GOOOL: aviso na tela inteira, tremida e som de torcida ----
+let golTimer = null;
+function receberGol(m) {
+  if (prefFut.avisos === "nenhum") return;
+  if (prefFut.avisos === "meu" && m.timeId !== prefFut.time) return;
+  const meu = !!prefFut.time && m.timeId === prefFut.time;
+  $("gol-time").textContent = "GOL DO " + m.time.toUpperCase() + "!";
+  $("gol-placar").textContent = m.placar;
+  $("gol-logo").src = m.logo || ""; $("gol-logo").classList.toggle("esc", !m.logo);
+  const o = $("gol-aviso"); o.classList.remove("esc"); o.classList.toggle("meu", meu);
+  document.body.classList.remove("tremer"); void document.body.offsetWidth; document.body.classList.add("tremer");
+  if (prefFut.som) somTorcida(meu ? 1 : 0.6);
+  clearTimeout(golTimer);
+  golTimer = setTimeout(() => { o.classList.add("esc"); document.body.classList.remove("tremer"); }, meu ? 9000 : 6000);
+}
+function somTorcida(forca) {
+  try {
+    garantirAudio();
+    const dur = 3.2, sr = ctxAudio.sampleRate, buf = ctxAudio.createBuffer(1, sr * dur, sr), d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    const src = ctxAudio.createBufferSource(); src.buffer = buf;
+    const filtro = ctxAudio.createBiquadFilter(); filtro.type = "bandpass"; filtro.frequency.value = 900; filtro.Q.value = 0.6;
+    const g = ctxAudio.createGain(), t = ctxAudio.currentTime;
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.5 * forca, t + 0.25);
+    g.gain.setValueAtTime(0.5 * forca, t + 1.6); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    filtro.frequency.setValueAtTime(700, t); filtro.frequency.linearRampToValueAtTime(1300, t + 0.5); filtro.frequency.linearRampToValueAtTime(900, t + dur);
+    src.connect(filtro).connect(g).connect(ctxAudio.destination); src.start();
+  } catch {}
+}
+
+$("item-estadio").onclick = () => mostrar("estadio");
+$("sel-time").onchange = (e) => { prefFut.time = e.target.value; salvarLocal("salinha-time", prefFut.time); renderEstadio(); };
+$("sel-avisos").onchange = (e) => { prefFut.avisos = e.target.value; salvarLocal("salinha-avisos-gol", prefFut.avisos); };
+$("btn-som-gol").onclick = () => { prefFut.som = !prefFut.som; salvarLocal("salinha-som-gol", prefFut.som ? "sim" : "nao"); renderEstadio(); if (prefFut.som) somTorcida(0.5); };
+$("gol-aviso").onclick = () => { $("gol-aviso").classList.add("esc"); mostrar("estadio"); };
 
 // =================== JOGOS ===================
 function renderJogos() {
